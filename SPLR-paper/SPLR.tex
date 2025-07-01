@@ -1,0 +1,1121 @@
+\documentclass{article}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Packages
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\usepackage{microtype}
+\usepackage{enumitem}
+\usepackage{graphicx}
+\usepackage{subfig}
+\usepackage{booktabs} % for professional tables
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{hyperref}
+\usepackage[accepted]{icml2025}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{mathtools}
+\usepackage{amsthm}
+\usepackage[capitalize,noabbrev]{cleveref}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Algorithm
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\renewcommand{\algorithmicrequire}{\textbf{Input:}}
+\renewcommand{\algorithmicensure}{\textbf{Output:}}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% THEOREMS
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{corollary}[theorem]{Corollary}
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{assumption}[theorem]{Assumption}
+\theoremstyle{remark}
+\newtheorem{remark}[theorem]{Remark}
+
+\icmltitlerunning{The Sparse-Plus-Low-Rank Quasi-Newton Method}
+
+\begin{document}
+
+\twocolumn[
+\icmltitle{The Sparse-Plus-Low-Rank Quasi-Newton Method for Entropic-Regularized Optimal Transport}
+\icmlsetsymbol{equal}{*}
+
+\begin{icmlauthorlist}
+\icmlauthor{Chenrui Wang}{sch}
+\icmlauthor{Yixuan Qiu}{sch}
+\end{icmlauthorlist}
+
+\icmlaffiliation{sch}{School of Statistics and Data Science, Shanghai University of Finance and Economics, Shanghai, China}
+\icmlcorrespondingauthor{Yixuan Qiu}{qiuyixuan@sufe.edu.cn}
+\icmlkeywords{Sparse, Low-Rank, Quasi-Newton Method, Entropic-Regularized Optimal Transport}
+\vskip 0.3in
+]
+\printAffiliationsAndNotice{}
+
+\begin{abstract}
+The entropic-regularized optimal transport (OT) has gained massive attention in machine learning due to its ability to provide scalable solutions for OT-based tasks. However, most of the existing algorithms, including the Sinkhorn algorithm and its extensions, suffer from relatively slow convergence in many cases. More recently, some second-order methods have been proposed based on the idea of Hessian sparsification. Despite their promising results, they have two major issues: first, there is limited theoretical understanding on the effect of sparsification; second, in cases where the transport plan is dense, Hessian sparsification does not perform well. In this paper, we propose a new quasi-Newton method to address these problems. First, we develop new theoretical analyses to understand the benefits of Hessian sparsification, which lays the foundation for highly flexible sparsification schemes. Then we introduce an additional low-rank term in the approximate Hessian to better handle the dense case. Finally, the convergence properties of the proposed algorithm are rigorously analyzed, and various numerical experiments are conducted to demonstrate its improved performance in solving large-scale OT problems.
+\end{abstract}
+
+
+\section{Introduction}
+\label{sec:intro}
+Optimal transport (OT), as originally described by Gaspard Monge, addresses the problem of moving a distribution (\emph{e.g.}, a pile of sand) to match a target configuration (\emph{e.g.}, a prescribed shape) while minimizing a cost, such as the total distance or effort required.
+In recent years, OT has received significant attention, due to its strong connections with statistical modeling and machine learning tasks.
+In particular, OT provides a principled way to measure the similarity between probability distributions by considering the cost of transporting the mass between them \citep{villani2009optimal}, making it highly relevant in applications involving structured data or distributions with geometric properties.
+See \citet{torres2021survey,montesuma2024recent} for an overview of its applications in modern machine learning.
+
+The discrete OT problem can be characterized by the following linear programming problem:
+\begin{eqnarray*}
+ & \underset{P\in\Pi(a,b)}{\min} \langle P,M\rangle,\\
+ & \Pi(a,b)=\{P\in\mathbb{R}^{n\times m}:P\mathbf{1}_{m}=a,P^{T}\mathbf{1}_{n}=b,P\ge0\},
+\end{eqnarray*}
+where $a\in\mathbb{R}^n$, $b\in\mathbb{R}^m$ are two vectors satisfying $a^T \mathbf{1}_n = b^T \mathbf{1}_m = 1$, $a>0$, $b>0$, $M$ is a given cost matrix, and all inequality signs are elementwise.
+
+More recently, the application of OT has experienced a significant boost due to the development of approximate solvers such as the entropic-regularized OT. Popularized by \citet{cuturi2013sinkhorn}, the entropic-regularized OT incorporates an entropic regularization $h(P) = \sum_{i=1}^{n}\sum_{j=1}^{m} P_{ij}(1 - \log P_{ij})$ into the OT problem:
+\begin{equation}
+\label{eq:sinkhorn}
+    \underset{P\in\Pi(a,b)}{\min} \langle P, M \rangle - \eta h(P).
+\end{equation}
+This regularization significantly reduces the computational cost of OT based on the Sinkhorn--Knopp algorithm \citep{yule1912methods,sinkhorn1964relationship},
+thus unlocking its potential in large-scale problems.
+Along this direction, many extensions of the Sinkhorn algorithm have also been proposed \citep{altschuler2017nearlinear,dvurechensky2018computational,guminov2021combination,lin2022efficiency}.
+As a result, OT is increasingly applied to solve a wide range of challenges in fields such as image processing, graphics, and machine learning \cite{peyre2019computational}.
+
+However, the computation of problem \eqref{eq:sinkhorn} is still a major challenge.
+For example, the Sinkhorn algorithm generally requires a large number of iterations to converge, especially when the regularization parameter is small.
+Other first-order methods that extend the Sinkhorn algorithm also show relatively slow convergence.
+To this end, another approach to solving entropic-regularized OT is to study the dual problem of \eqref{eq:sinkhorn}, \emph{i.e.}, maximizing a function $\mathcal{L}(\alpha,\beta)$, $\alpha\in\mathbb{R}^n$, $\beta\in\mathbb{R}^m$, where
+\begin{align}
+\mathcal{L}(\alpha,\beta)=\ & \alpha^{T}a+\beta^{T}b \nonumber\\
+ & -\eta\sum_{i=1}^{n}\sum_{j=1}^{m}\exp\{\eta^{-1}(\alpha_{i}+\beta_{j}-M_{ij})\}. \label{eq:dual}
+\end{align}
+Once an optimal solution $(\alpha^*,\beta^*)$ to problem \eqref{eq:dual} is sought, the primal optimal solution to \eqref{eq:sinkhorn}, denoted by $T^*\in\mathbb{R}^{n\times m}$, can be obtained as $T_{ij}^*=\exp\{ \eta^{-1}(\alpha_i^* + \beta_j^* - M_{ij}) \}$.
+Since $\mathcal{L}(\alpha, \beta) = \mathcal{L}(\alpha + c \mathbf{1}_n, \beta - c \mathbf{1}_m)$ for all $c \in \mathbb{R}$, we can remove the redundant degree of freedom by setting $\beta_m = 0$ globally.
+Then eventually, solving entropic-regularized OT is equivalent to solving
+\begin{equation}
+\label{eq:main}
+\min_{x\in\mathbb{R}^{n+m-1}} f(x),
+\end{equation}
+where
+\begin{align*}
+f(x)=-\mathcal{L}(\alpha, \beta)\ & = \eta\sum_{i=1}^{n}\sum_{j=1}^{m}\exp\{\eta^{-1}(\alpha_{i}+\beta_{j}-M_{ij})\}\nonumber\\
+ & \qquad-\alpha^T a-\beta^T b, \label{eq:objective}
+\end{align*}
+and $x = (\alpha_1,\ldots,\alpha_n,\beta_1,\ldots,\beta_{m-1})^T$.
+Clearly, \eqref{eq:main} is a smooth and unconstrained convex optimization problem, which brings the possibility to use second-order methods for acceleration.
+
+However, the classical Newton method is not a realistic approach, since the Hessian matrix of $f(x)$ is a dense matrix of the size $(n+m-1)\times(n+m-1)$, leading to an $O((n+m)^3)$ computational cost in computing the Newton direction. More recently,
+\citet{tang2024accelerating} and \citet{tang2024safe} tackle this problem based on the idea of Hessian sparsification, \emph{i.e.}, approximating the true Hessian matrix by sparse matrices, thus leading to efficient sparse linear systems to compute the search directions. This line of works show some promising results, but two major issues remain to be solved: first, there is limited theoretical understanding on the effect of sparsification; second, in cases where the true Hessian matrix is relatively dense, Hessian sparsification does not perform well.
+
+In this paper, we mainly target on resolving the two issues above, and propose a new quasi-Newton method to solve entropic-regularized OT. First, we provide new theoretical analyses on the sparsified Hessian matrices, and show that sparsification brings various benefits. The results also motivate a class of flexible sparsification schemes that substantially generalize existing methods.
+Second, we propose a new model to better approximate the true Hessian matrix, which combines Hessian sparsification with low-rank approximation. We demonstrate that this method greatly enhances the algorithm's performance in scenarios where the Hessian matrix is relatively dense.
+Rigorous convergence analysis is provided to support the application of the proposed algorithm in large-scale OT problems.
+An efficient implementation of the method is included in the RegOT Python package\footnote{\url{https://github.com/yixuan/regot-python}}.
+
+\paragraph{Contribution}
+Our main contribution compared to prior art is summarized as follows:
+\begin{enumerate}
+    \item New theoretical results are developed to understand the mechanism of Hessian sparsification. Such a theoretical understanding also guarantees that a broad range of sparsification schemes enjoy desirable properties.
+    \item A new quasi-Newton method is proposed to solve entropic-regularized OT that combines the advantages of Hessian sparsification and low-rank approximation, achieving fast convergence speed with low computational cost.
+    \item We provide convergence guarantees for the proposed method, and conduct extensive numerical experiments to demonstrate its performance.
+\end{enumerate}
+
+\paragraph{Notation}
+Throughout this article we adopt the following notation. For $n \in \mathbb{N}$, denote $[n] := \{ 1, 2, \ldots, n \}$. Given a matrix $A\in\mathbb{R}^{n\times m}$ and a vector $v\in\mathbb{R}^m$, we use $\tilde{A}\in\mathbb{R}^{n\times (m-1)}$ to represent the first $(m-1)$ columns of $A$, and $\tilde{v}\in\mathbb{R}^{m-1}$ to represent the first $(m-1)$ elements of $v$; inequality signs such as $A>0$ and $v<0$ are all elementwise. We use $\lambda_{\max}(\cdot)$ and $\lambda_{\min}(\cdot)$ to represent the largest and smallest eigenvalues of real symmetric matrices, respectively. For a matrix $A$, let $A_{i \cdot}$ be the vector of the $i$-th row of $A$, and $A_{\cdot j}$ be the vector of the $j$-th column of $A$.
+
+
+\section{Related Work}
+\label{sec:related_work}
+
+\paragraph{OT in machine learning}
+Optimal transport has emerged as a powerful mathematical framework with diverse applications in machine learning \citep{torres2021survey,montesuma2024recent}. It is widely used for tasks such as domain adaptation \citep{courty2017optimal}, generative modeling \citep{arjovsky2017wasserstein,genevay2018learning,huynh2021optimal}, clustering \citep{laclau2017co}, and cross-domain alignment \citep{chen2020graph}, among many others.
+
+\paragraph{Solving entropic-regularized OT}
+There is a rich collection of algorithms developed to solve entropic-regularized OT. Following the seminal work \citet{cuturi2013sinkhorn} that popularizes the Sinkhorn--Knopp algorithm \citep{yule1912methods,sinkhorn1964relationship}, many extension methods are proposed \citep{altschuler2017nearlinear,dvurechensky2018computational,guminov2021combination,lin2022efficiency}.
+In addition to first-order methods, \citet{brauer2017sinkhorn,tang2024accelerating,tang2024safe} consider Newton-type second-order methods to solve the dual problem of entropic-regularized OT.
+Another direction, as in the importance sparsification approach \citep{li2023importance},
+%leverages the inherent sparsity of the transport plan
+accelerates computation by constructing a sparse approximation of the kernel matrix, thereby significantly reducing the cost of Sinkhorn iterations.
+
+\paragraph{Quasi-Newton methods}
+Quasi-Newton methods are a class of optimization techniques designed to efficiently solve large-scale smooth optimization problems \citep{nocedal2006numerical}. Unlike the classical Newton methods, they approximate the Hessian matrix by simpler structures in computing the search directions, thus reducing computational complexity while retaining rapid convergence. 
+These features make them highly effective for machine learning and optimization tasks involving high-dimensional data. For example, \citet{cuturi2018semidual} suggests using the limited-memory Broyden–Fletcher–Goldfarb–Shanno (L-BFGS) method \citep{liu1989limited} to solve the dual problem of entropic-regularized OT.
+
+
+\section{Understanding Hessian Sparsification}
+\label{sec:understanding}
+
+\subsection{Background}
+Recall that our main objective is to solve the unconstrained convex optimization problem \eqref{eq:main}. It is known that $f(x)$ has some good properties:
+\begin{enumerate}
+    \item $f(x)$ is strictly convex, so if \eqref{eq:main} has a solution, then the solution is unique.
+    \item The gradient of $f(x)$, denoted by $g(x)\coloneqq\nabla f(x)$, has a closed-form expression:
+    \begin{equation*}
+    \label{eq:gradient}
+        g(x) = \begin{bmatrix}
+            T \mathbf{1}_m - a \\
+            \tilde{T}^T \mathbf{1}_n - \tilde{b} \\
+        \end{bmatrix},\ 
+        T = T(\alpha, \beta),
+    \end{equation*}
+    where the free variables are $x=(\alpha^T,\tilde{\beta}^T)^T$, $\beta=(\tilde{\beta}^T,0)^T$, $T(\alpha,\beta)$ is an $n\times m$ matrix with elements $[ T(\alpha, \beta) ]_{ij} = \exp\{ \eta^{-1}(\alpha_i + \beta_j - M_{ij}) \}$, and recall that $\tilde{T}$ means removing the last column of $T$.
+    \item $f(x)$ is twice differentiable, and the Hessian matrix $H(x)\coloneqq\nabla^2 f(x)$ also has a simple expression:
+    \begin{equation}
+    \label{eq:Hessian}
+        H(x) = \eta^{-1}\begin{bmatrix}
+                \mathbf{diag}(T \mathbf{1}_m) & \tilde{T} \\
+                \tilde{T}^{T} & \mathbf{diag}(\tilde{T}^{T} \mathbf{1}_n) \\
+            \end{bmatrix}.
+    \end{equation}
+\end{enumerate}
+
+The classical Newton method solves \eqref{eq:main} by generating a sequence of iterates $\{x_k\}$ based on the update rule
+$x_{k+1}=x_k-\alpha_k H_k^{-1}g_k$, where $g_k=g(x_k)$, $H_k=H(x_k)$, and $\alpha_k>0$ is the step size at iteration $k$.
+However, solving $H_k^{-1}g_k$ for a dense Hessian matrix $H_k$ has a computational cost at the order of $O((n+m)^3)$, which is too demanding for large-scale OT problems. Therefore, several Hessian sparsification methods have been proposed to approximate $H_k$ by some sparse matrices, which lead to significantly reduced computational costs.
+
+The SNS algorithm \citep{tang2024accelerating} sparsifies the Hessian matrix by a thresholding rule. Specifically, any entry in the Hessian matrix smaller than a constant $\rho$ is truncated to zero. However, although this procedure preserves the symmetry and diagonal dominance of the Hessian matrix, there is no guarantee on the positive definiteness of the sparsified Hessian. Specifically, 0 might be included in one of the Gershgorin discs, admitting $\lambda = 0$ as a possible eigenvalue.
+
+The SSNS algorithm \citep{tang2024safe} takes a similar but different approach, which only sparsifies the off-diagonal elements of the Hessian matrix. Meanwhile, it controls the row-wise and column-wise approximation errors. This method provides guarantees on the positive definiteness, but it is not flexible to design the sparsity pattern. In particular, the density after sparsification is unknown in advance, thus making it difficult to control the computational cost. To this end, in Section \ref{subsec:eigenvalue} we carefully analyze the eigenvalue structure of the sparsified Hessian, which provides various new insights on the consequence of Hessian sparsification.
+
+
+\subsection{Eigenvalue structure of the sparsified Hessian}
+\label{subsec:eigenvalue}
+As can be seen from \eqref{eq:Hessian}, the true Hessian matrix at $x=(\alpha^T,\tilde{\beta}^T)^T$ is determined by the matrix $T=T(\alpha,\beta)$. Therefore, a natural way to sparsifying $H(x)$ is to sparsify the $T$ matrix. Following the method proposed in \citet{tang2024safe}, we consider the \emph{off-diagonal} sparsification framework as given in Definition \ref{def:sparsification-scheme}.
+
+\begin{definition}[Sparsification scheme]
+\label{def:sparsification-scheme}
+A sparsification scheme is defined by a set of coordinates $\Omega \subseteq \bar{\Omega} = \{(i, j): i \in [n], j \in [m-1] \}$. In particular, the sparsified matrix $\tilde{T}_{\Omega}$ has elements
+\begin{equation*}
+\label{eq:sparsified-T}
+(\tilde{T}_{\Omega})_{ij} = \begin{cases}
+\tilde{T}_{ij}, & (i,j)\in\Omega,\\
+0, & (i,j)\notin\Omega,
+\end{cases}
+\end{equation*}
+and the sparsified Hessian matrix is given by
+\begin{equation*}
+\label{eq:sparsified-Hessian}
+H_{\Omega}=H_{\Omega}(x) = \eta^{-1}\begin{bmatrix}
+    \mathbf{diag}(T \mathbf{1}_m) & \tilde{T}_{\Omega} \\
+    \tilde{T}_{\Omega}^{T} & \mathbf{diag}(\tilde{T}^{T} \mathbf{1}_n) \\
+    \end{bmatrix}.
+\end{equation*}
+\end{definition}
+Clearly, $H_\Omega$ depends on the current variable $x$, but we will omit it for brevity if no confusion is caused.
+It is also worth noting that the diagonal elements of $H_\Omega$ remain unchanged compared to $H=H(x)$, which are computed from the original $T$ instead of the sparsified $\tilde{T}_\Omega$. This structure is crucial for our theoretical analysis.
+
+To gain insights on the effect of sparsification, we first consider the process of \emph{incremental sparsification}: removing exactly two symmetric elements from the current approximate Hessian $H_{\Omega_0}$, resulting in another matrix $H_{\Omega_1}$, where $\Omega_0$ and $\Omega_1$ only differ by one element, and $\Omega_1 \subset \Omega_0$.
+Then the main theoretical result of this section, Theorem \ref{thm:incremental-sparsification}, claims that $H_{\Omega_1}$ strictly decreases the condition number of $H_{\Omega_0}$.
+
+\begin{assumption} \label{assump:positive-power}
+For a sparsification scheme $\Omega \subseteq \bar{\Omega}$, there exists a positive integer $p>0$ such that the $p$-th power of $H_\Omega$ has strictly positive entries, \emph{i.e.}, $(H_\Omega)^p > 0$.
+\end{assumption}
+
+\begin{theorem}
+\label{thm:incremental-sparsification}
+Given two sparsification schemes $\Omega_0, \Omega_1 \subseteq \bar{\Omega}$, suppose that $\Omega_1 \subset \Omega_0$ and they only differ by one element. If Assumption \ref{assump:positive-power} holds for $\Omega_1$, then we have
+\begin{equation*}
+ \begin{aligned}
+    \lambda_{\max}(H_{\Omega_1}) &< \lambda_{\max}(H_{\Omega_0}), \\
+    \lambda_{\min}(H_{\Omega_1}) &> \lambda_{\min}(H_{\Omega_0}), \\
+\end{aligned}
+\end{equation*}
+which implies that $H_{\Omega_1}$ strictly decreases the condition number of $H_{\Omega_0}$.
+\end{theorem}
+
+Suppose that we have chosen a specific sparsification scheme $\Omega \subseteq \bar{\Omega}$ that satisfies Assumption \ref{assump:positive-power}, and then there must exist a sequence of sparsification schemes $\{\Omega_t : t \in [T]\}$ that starts with $\Omega_1 = \bar{\Omega}$ and ends with $\Omega_T = \Omega$, satisfying $\Omega_{t + 1} \subset \Omega_{t}, \forall t \in [T - 1]$, and $\Omega_t$ and $\Omega_{t+1}$ only differ by one element. Since Assumption \ref{assump:positive-power} holds for $\Omega = \Omega_T$,
+Lemma \ref{lem:monotonicity-of-assumption} implies that it also holds for all sparsification schemes in the sequence,
+as $\Omega_T \subseteq \Omega_t, \forall t \in [T]$. Then by applying Theorem \ref{thm:incremental-sparsification} repeatedly to $\Omega_{t}$ and $\Omega_{t+1}$ for $t=1,\ldots,T-1$, we obtain the following corollary.
+
+\begin{corollary}
+\label{cor:incremental-sparsification}
+    For any sparsification scheme $\Omega \subseteq \bar{\Omega}$ satisfying Assumption \ref{assump:positive-power}, the corresponding sparsified Hessian matrix $H_{\Omega}$ has the following properties:
+    \begin{equation*}
+        \begin{aligned}
+            \lambda_{\max}(H_{\Omega}) &\leq \lambda_{\max}(H), \\
+            \lambda_{\min}(H_{\Omega}) &\geq \lambda_{\min}(H), \\
+        \end{aligned}   
+    \end{equation*}
+    where $H = H_{\bar{\Omega}} = H(x)$. The equalities hold if and only if $\Omega = \bar{\Omega}$.
+\end{corollary}
+
+\subsection{Numerical Verification}
+We numerically verify Theorem \ref{thm:incremental-sparsification} and Corollary \ref{cor:incremental-sparsification} through a simple experiment that illustrates how eigenvalues evolve during the sparsification process. Specifically, we generate a random matrix $T \in \mathbb{R}^{n \times m}$ with entries $T_{ij} \overset{iid}{\sim} \text{Unif}(0, 1)$, and construct the corresponding Hessian matrix $H$. We then iteratively set one nonzero element of $T$ to zero at each step, recalculating the minimum and maximum eigenvalues of $H$ at each iteration, until only the first row and first column of $T$
+%(i.e., $T_{1\cdot}$ and $T_{\cdot 1}$)
+remain nonzero (see Theorem \ref{thm:1row-1col-assumption} for the rationale of this setting). 
+% This procedure is repeated 10 times, and the results are summarized in Figure \ref{fig:eigenvalue_sparsification}.
+We repeat this procedure five times, and illustrate the change of eigenvalues and condition number of the sparsified Hessian in Figure \ref{fig:eigenvalue_sparsification}.
+
+The results clearly demonstrate that during the incremental sparsification process, the minimum eigenvalue monotonically increases, while the maximum eigenvalue monotonically decreases, which is consistent with our theoretical predictions.
+
+\begin{figure}[htb]
+    \centering
+    \includegraphics[width=0.4\textwidth]{save/eigen/eigenvalues_n30_m30}
+    \includegraphics[width=0.4\textwidth]{save/eigen/condition_number_n30_m30} \\
+    \caption{Plot of minimum and maximum eigenvalues of the sparsified Hessian matrix during the sparsification process.}
+    \label{fig:eigenvalue_sparsification}
+\end{figure}
+
+\subsection{Summary}
+We summarize this section by making a few remarks on the significance of Theorem \ref{thm:incremental-sparsification} and Corollary \ref{cor:incremental-sparsification}:
+\begin{enumerate}
+    \item Since the true Hessian matrix is positive definite, Corollary \ref{cor:incremental-sparsification} implies that \emph{any} valid sparsification scheme also maintains positive definiteness. This is crucial for computing the search directions, as the approximate Hessian also needs to be inverted.
+    \item The theorems indicate that the sparsified Hessian has a smaller condition number, which guarantees better numerical stability in solving linear systems. Even better, a smaller condition number makes iterative sparse linear solvers (e.g. conjugate gradient method) converge faster.
+    \item The controlled condition number is essential for the theoretical analysis of quasi-Newton methods; see for example Section 3.2 of \citet{nocedal2006numerical}.
+    \item Corollary \ref{cor:incremental-sparsification} is valid for almost \emph{any} sparsification scheme. This theoretical guarantee allows for highly flexible algorithmic designs, which greatly generalizes prior works on this direction.
+    \item The only requirement is Assumption \ref{assump:positive-power}, which is very weak: it can be satisfied with \emph{extremely sparse} matrices.
+    In Section \ref{subsec:density}, we provide a constructive method to let sparsification schemes easily satisfy this assumption.
+\end{enumerate}
+
+
+\section{The Sparse-Plus-Low-Rank Method}
+\label{sec:method}
+
+\subsection{Overview}
+\label{subsec:overview}
+Despite the various benefits as explained in Section \ref{sec:understanding}, the Hessian sparsification method has one intrinsic limitation: it highly relies on the sparsity property of the true Hessian matrix. When the true Hessian is dense, no sparsified version would perform well, and we need better models to approximate the Hessian matrix.
+% A core motivation of our new method is that, although sparsification has many advantages, when the true Hessian is relatively dense, sparsification methods cannot provide a good approximation.
+To this end, we introduce the sparse-plus-low-rank (SPLR) approach that improves the approximation by adding low-rank terms to the sparsified Hessian.
+At a high level, we adopt the quasi-Newton framework to solve \eqref{eq:main} based on the update rule
+\[
+x_{k+1}=x_k-\alpha_k B_k^{-1}g_k,
+\]
+where $B_k$ is an approximation to the true Hessian matrix $H_k$, and $\alpha_k>0$ is a suitable step size that satisfies the Wolfe conditions given in \eqref{eq:wolfe}. In our method, $B_k$ consists of three parts:
+\begin{equation}
+\label{eq:Bk}
+B_k=H_{\Omega}+(auu^T+bvv^T)+\tau I,
+\end{equation}
+where $H_{\Omega}$ is the sparsified Hessian matrix according to some sparsification scheme $\Omega$, $auu^T+bvv^T$ is a rank-two approximation term, and $\tau>0$ is a shift parameter. Note that all these terms may vary with the iteration number $k$.
+
+The intuition behind \eqref{eq:Bk} is that when $H_k$ is truly close to a sparse matrix, $H_{\Omega}$ would be able to capture most of its information. And when this is not the case, the low-rank term can then compensate for the possibly dense difference $H_k-H_{\Omega}$. The shift term $\tau I$ is used to enhance the numerical stability when inverting the approximate Hessian matrix. Overall, $B_k$ is expected to perform as well as existing sparse Newton methods, and to show its advantage when $H_k$ is relatively dense.
+
+In Algorithm \ref{alg:SPLR}, we first present our main SPLR algorithm to solve entropic-regularized OT, and then elaborate its details in subsequent sections, such as the choice of $\Omega$, the specification of $(a,b,u,v)$, etc.
+
+\begin{algorithm}[h]
+   \caption{The Sparse-plus-low-rank quasi-Newton method for entropic-regularized OT}
+   \label{alg:SPLR}
+\begin{algorithmic}[1]
+    \REQUIRE Initial point $x_0$, maximum density $\rho_{\max} \in [0, 1]$, maximum shift $ \tau_{\max} > 0$, stopping criterion $\varepsilon_{tol} > 0$
+    \ENSURE $x_k$
+    \STATE Set $\rho_{\min} = 0.01\cdot \rho_{\max}, \rho_0 = 0.1\cdot \rho_{\max}$, $\Omega_0 = \Omega^{*}(\rho_0)$
+    \STATE Compute $f_0 = f(x_0), g_0 = g(x_0), H_0=H(x_0)$
+    \STATE Sparsify $H_0$ according to scheme $\Omega_0$ to obtain $H_{\Omega_0}^{0}$
+    \STATE Set $\tau_0=\min\{\tau_{\max}, \|g_0\|\}$
+    \STATE Compute $d_0 = -(H_{\Omega_{0}}^{0} + \tau_0 I)^{-1} g_0$
+    \STATE Select the step size $\alpha_0$ and update $x_1 = x_0 + \alpha_0 d_0$
+    \FOR{$k = 1, 2, \ldots$}
+        \STATE Compute $f_k = f(x_k), g_k = g(x_k), H_k=H(x_k)$
+        \IF{$\|g_k\| < \varepsilon_{tol}$}
+            \STATE {\bfseries return} $x_k$
+        \ENDIF
+        \STATE Update $\rho_k$ according to \eqref{eq:update-rho}
+        \STATE Compute $\Omega_k = \Omega^{*}(\rho_k)$ with Algorithm \ref{alg:sparsification}, and sparsify $H_k$ to obtain $H_{\Omega_k}^{k}$ 
+        \STATE Compute $s_{k-1} = x_k - x_{k-1}, y_{k-1} = g_k - g_{k-1}$
+        \STATE Compute $a, b, u, v$ according to \eqref{eq:secant-equation-solution}
+        \STATE Let $L=\begin{cases}
+            auu^{T}+bvv^{T}, & \text{if }y^{T}s>10^{-6}\Vert y\Vert^{2}\\
+            O, & \text{otherwise}
+            \end{cases}$
+        \STATE Update $\tau_k = \min\{\tau_{\max}, \|g_k\|\}$
+        \STATE Compute $d_k ~{=}~ -B_k^{-1} g_k$, where $B_k = H_{\Omega_k}^{k} + L + \tau_k I$
+        \STATE Select the step size $\alpha_k$ and update $x_{k+1} = x_k + \alpha_k d_k$
+    \ENDFOR
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Sparsification with density}
+\label{subsec:density}
+One of the most important ingredients of the proposed SPLR algorithm is the choice of the sparsification scheme $\Omega$ in \eqref{eq:Bk}.
+First recall that an important condition for Corollary \ref{cor:incremental-sparsification} to hold is that $\Omega$ satisfies Assumption \ref{assump:positive-power}. Below we first show that there is a ``minimal'' scheme $\Omega^*$ meeting this requirement, and then any scheme containing $\Omega^*$ would also satisfy Assumption \ref{assump:positive-power}.
+
+\begin{theorem}
+\label{thm:1row-1col-assumption}
+Define $\Omega^* = \{(i, j): i = 1 \text{ or } j = 1,i \in [n], j \in [m-1] \}$, and let $H_{\Omega^*}$ be the corresponding sparsified Hessian matrix. Then $\Omega^*$ satisfies Assumption \ref{assump:positive-power} with $(H_{\Omega^*})^4 > 0$.
+\end{theorem}
+
+\begin{remark}
+The choice ``$i=1 \text{ or } j=1$'' in the definition of $\Omega^*$ is not essential. One can use ``$i=i^* \text{ or } j=j^*$'' for any fixed values of $i^*$ and $j^*$. $\Omega^*$ basically means keeping one row and one column of $\tilde{T}$ and setting other elements to zero.
+\end{remark}
+
+Theorem \ref{thm:1row-1col-assumption} shows that it is reasonable to use $\Omega^*$ as our sparsification scheme. However, $\Omega^*$ may contain too few elements to provide a good approximation to $H$. For better performance, we keep a fixed proportion $\rho$ of the largest elements of $\tilde{T}$, leading to a sparsification scheme $\Omega(\rho)$, where $\rho \in [0, 1]$ represents the density. To satisfy Assumption \ref{assump:positive-power}, we take the union of $\Omega^*$ and $\Omega(\rho)$, denoted by $\Omega^{*}(\rho) := \Omega(\rho) \cup \Omega^{*}$.
+% With $\Omega^{*} \subseteq \Omega^{*}(\rho)$,
+Then we can show that $\Omega^{*}(\rho)$ also satisfies Assumption \ref{assump:positive-power} according to Lemma \ref{lem:monotonicity-of-assumption}.
+
+Formally, first define an operator $\texttt{select\_large}(\tilde{T}, \rho)$, which takes an $n\times (m-1)$ matrix $\tilde{T}$ and a density $\rho$ as inputs, and outputs a set $\Omega$ consisting of the coordinates of the largest $\lfloor \rho n (m-1) \rfloor$ elements in $\tilde{T}$. Then the sparsification scheme with a given density is obtained via Algorithm \ref{alg:sparsification}.
+
+\begin{algorithm}[h]
+    \caption{Sparsification scheme with a given density}
+    \label{alg:sparsification}
+    \begin{algorithmic}[1]
+        \REQUIRE Dual variable vector $x = (\alpha^T, \tilde{\beta}^T)^T$, density parameter $\rho \in [0, 1]$
+        \ENSURE Sparsification scheme $\Omega^{*}(\rho)$
+        \STATE Compute $T = T(\alpha, \beta)$
+        \STATE Compute $\Omega(\rho) = \texttt{select\_large}(\tilde{T}, \rho)$
+        \STATE Set $\Omega^{*}(\rho) = \Omega(\rho) \cup \Omega^{*}$
+    \end{algorithmic}
+\end{algorithm}
+
+\subsection{Low-rank terms}
+To enhance the approximation quality when the true Hessian is not well captured by sparsification alone, we incorporate a low-rank correction term. Specifically, suppose that we are at the $(k+1)$-th iteration of the Newton-type optimization procedure. We approximate $H_{k+1}$ by a matrix $B_{k+1}$ of the form:
+\begin{equation*}
+\label{eq:BFGS-update}
+    H_{k+1} \approx B_{k+1} \coloneqq H_{\Omega}^{k+1} + auu^T + bvv^T + \tau_{k+1} I,
+\end{equation*}
+where $H_{\Omega}^{k+1}$ is the sparsified version of $H_{k+1}$ according to a scheme $\Omega$, and $a, b \in \mathbb{R}, u, v \in \mathbb{R}^{n+m-1}$ are to be specified later. Motivated by various quasi-Newton methods, especially the Broyden--Fletcher--Goldfarb--Shanno (BFGS) update rule, we determine $a, b, u, v$ by the secant equation, namely the first-order approximation of $g$ at $x_{k+1}$:
+\begin{equation*}
+    g(x) = g_{k+1} + H_{k+1}(x - x_{k+1}) + O(\|x - x_{k+1}\|^2).
+\end{equation*}
+Replace $x$ with $x_k$, and we get
+\begin{equation*}
+    g_k = g_{k+1} + H_{k+1}(x_k - x_{k+1}) + O(\|x_{k} - x_{k+1}\|^2).
+\end{equation*}
+Let $s_k = x_{k+1} - x_k$ and $y_k = g_{k+1} - g_k$. By ignoring the remainder term, we have $y_k \approx H_{k+1}s_k$.
+So it is reasonable to require the approximation of $H_{k+1}$, namely $B_{k+1}$, to satisfy:
+\begin{equation}
+\label{eq:secant-equation}
+    y_k = B_{k+1}s_k = (H_{\Omega}^{k+1} + auu^T + bvv^T + \tau_{k+1} I)s_k.
+\end{equation}
+One solution to \eqref{eq:secant-equation} is:
+\begin{align}
+u & =y_{k},\quad v=(H_{\Omega}^{k+1}+\tau_{k+1}I)s_{k},\nonumber \\
+a & =\frac{1}{y_{k}^{T}s_{k}},\quad b=-\frac{1}{s_{k}^{T}(H_{\Omega}^{k+1}+\tau_{k+1}I)s_{k}}. \label{eq:secant-equation-solution}
+\end{align}
+
+Although such a modification makes the approximation dense again, its inverse can be computed very conveniently with sparse or vector-based arithmetics (see for example Section 6.1 of \citealp{nocedal2006numerical}):
+\[
+B_{k+1}^{-1}=U^{T}(H_{\Omega}^{k+1}+\tau_{k+1} I)^{-1}U+\xi_k s_{k}s_{k}^{T},
+\]
+where $\xi_k=1/(y_k^T s_k)$ and $U=I-\xi_k y_{k}s_{k}^{T}$. Since $(H_{\Omega}^{k+1}+\tau_{k+1} I)$ is still a sparse and positive definite matrix, linear systems associated with it can be efficiently solved via either direct methods such as the sparse Cholesky decomposition, or iterative methods such as the conjugate gradient method.
+
+\subsection{Practical implementation}
+\paragraph{Shift parameter}
+The shift parameter $\tau_k$ in Algorithm \ref{alg:SPLR} is not necessary for theoretical analysis, and in fact, one can globally set $\tau_k\equiv 0$ without breaking the algorithm. However, in practical implementation, it brings various benefits, for example, stabilizing the linear system $B_k^{-1}g_k$, and potentially accelerating iterative linear solvers such as the conjugate gradient method. This is because $H_{\Omega}^k + \tau_k I$ has a smaller condition number than $H_{\Omega}^k$.
+
+To avoid introducing a large approximation error, we dynamically set $\tau_k$ to be the current gradient norm $\Vert g_k\Vert$, so that the $\tau_k I$ term in \eqref{eq:Bk} is negligible when $x_k$ is close to the optimum. An additional safeguard is to set a maximum shift $\tau_{\max}$, in case $\Vert g_k \Vert$ is too large at the beginning. So overall, we take $\tau_k = \min\{\tau_{\max}, \|g_k\|\}$ in each iteration.
+
+\paragraph{Adaptive density selection}
+Thanks to the theoretical guarantee presented in Corollary \ref{cor:incremental-sparsification}, we have a high degree of freedom to design the sparsification scheme in each iteration.
+In our implementation, the density parameter $\rho_k$ varies according to $\|g_k\|$. If $\|g_k\|$ decreases compared to the previous iteration, it means that the previous $B_{k-1}$ potentially provides a good approximation to $H_{k-1}$, so we can try a more sparse $H_{\Omega}^{k}$ in the current iteration, thus accelerating the search direction computation.
+Otherwise, we should increase the density to obtain a more precise approximation to $H_k$. Based on this idea, the update rule for $\rho_k$ is:
+\begin{equation}
+\label{eq:update-rho}
+\rho_{k}=\begin{cases}
+\max\{\rho_{\min},0.99\rho_{k-1}\}, & \text{if }\Vert g_{k}\Vert<\Vert g_{k-1}\Vert\\
+\min\{\rho_{\max},1.1\rho_{k-1}\}, & \text{otherwise}
+\end{cases}.
+\end{equation}
+
+\paragraph{Line search method}
+Finally, we use the Mor\'e--Thuente line search algorithm \citep{more1994line} to compute the step size $\alpha_k>0$ that satisfies the Wolfe conditions:
+\begin{align}
+\label{eq:wolfe}
+\begin{split}
+f(x_{k}+\alpha_{k}d_{k}) & \le f(x_{k})+c_{1}\alpha_{k}(g_{k}^{T}d_{k}),\\{}
+[g(x_{k}+\alpha_{k}d_{k})]^{T}d_{k} & \ge c_{2}(g_{k}^{T}d_{k}),
+\end{split}
+\end{align}
+where $0<c_1<1/2$ and $c_1<c_2<1$ are pre-specified constants.
+
+
+\section{Convergence Analysis}
+\label{sec:convergence}
+In this section, we prove that the proposed Algorithm \ref{alg:SPLR} enjoys a global convergence property, and the convergence rate is at least linear. Much of the theory has been developed in classical quasi-Newton literature such as \citet{byrd1987global}, but the key challenge here is to verify certain properties of the approximate Hessian matrix $B_{k+1}$.
+
+In particular, the key to the convergence of quasi-Newton methods is the condition number of $B_{k+1}$ in each iteration. Therefore, it is crucial to bound both the smallest and largest eigenvalues of $B_{k+1}$ for every $k$.
+We then have the following key findings.
+
+\begin{theorem}
+\label{thm:eigenvalue_B}
+Assume that there is a closed set $D$ such that
+\[
+\lambda_{\min}(H(x))\ge L,\quad\lambda_{\max}(H(x))\le U
+\]
+for some constants $L,U>0$ and all $x\in D$, and that $(1-t)x_k+t x_{k+1}\in D$ for all $t\in [0,1]$. Then
+\begin{align*}
+\lambda_{\min}(B_{k+1}) & \ge (2+3U/L)^{-1}L,\\
+\lambda_{\max}(B_{k+1}) & \le 2U+\tau_{\max}.
+\end{align*}
+\end{theorem}
+
+After bounding the eigenvalues of $B_{k+1}$, we then obtain the global convergence of the proposed algorithm.
+
+\begin{corollary}
+\label{cor:global_convergence}
+Let $x_0$ be an arbitrary initial value, and $\{x_k\}$ be generated by Algorithm \ref{alg:SPLR}. Then
+\[
+\lim_{k\rightarrow\infty} \Vert g(x_k) \Vert = 0.
+\]
+\end{corollary}
+
+Finally, we show that Algorithm \ref{alg:SPLR} at least has a linear convergence rate.
+
+\begin{theorem}
+\label{thm:linear_convergence}
+Let $f^*$ be the optimal value of $f(x)$. Then for all $k\ge 1$, there is a constant $0<r<1$ such that
+\[
+f(x_{k+1})-f^*\le r[f(x_k)-f^*].
+\]
+\end{theorem}
+
+Although the theory only gives a linear convergence rate, our numerical experiments in Section \ref{sec:experiments} suggest that in many cases, the proposed SPLR algorithm achieves super-linear-like convergence speed.
+
+
+\section{Numerical Experiments}
+\label{sec:experiments}
+In this section, we evaluate the performance of the proposed SPLR algorithm via a series of numerical experiments, and compare SPLR with a number of widely-used algorithms for solving entropic-regularized OT: 1. the Sinkhorn algorithm (equivalent to block coordinate descent, BCD); 2. the adaptive primal-dual accelerated gradient descent (APDAGD, \citealp{dvurechensky2018computational}); 3. L-BFGS; 4. the Newton method; 5. the SSNS algorithm \citep{tang2024safe}.
+
+We consider both synthetic and realistic OT settings, and fix the regularization parameter to be $\eta=0.001$. To make $\eta$ comparable for different problems, we normalize all cost matrices to have a unit infinity norm, \emph{i.e.}, $M\gets M/\Vert M \Vert_\infty$. We use the gradient norm $\Vert g(x_k) \Vert$ to measure the optimization error of the current iterate $x_k$.
+Additional test examples with different cost matrix settings and $\eta$ values are given in Appendix \ref{appendix:extra-cost} and Appendix \ref{appendix:extra-eta}, respectively.
+The experiments in this section can be reproduced using the code on our Github repository\footnote{\url{https://github.com/Aoblex/numerical-experiments}}.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{figure*}[p]
+    \centering
+    \includegraphics[width=0.33\textwidth]{save/Synthetic I/iterations/n=1000, m=1000, reg=0.001}
+    \includegraphics[width=0.33\textwidth]{save/Synthetic I/iterations/n=5000, m=5000, reg=0.001}
+    \includegraphics[width=0.33\textwidth]{save/Synthetic I/iterations/n=10000, m=10000, reg=0.001} \\
+    \includegraphics[width=0.33\textwidth]{save/Synthetic I/run_times/n=1000, m=1000, reg=0.001}
+    \includegraphics[width=0.33\textwidth]{save/Synthetic I/run_times/n=5000, m=5000, reg=0.001}
+    \includegraphics[width=0.33\textwidth]{save/Synthetic I/run_times/n=10000, m=10000, reg=0.001}
+    \caption{Performance of different algorithms on synthetic data I. Top: Gradient norm vs. iteration number for different problem sizes. Bottom: Gradient norm vs. run time.}
+    \label{fig:synthetic_1}
+\end{figure*}
+
+\begin{figure*}[p]
+    \centering
+    \includegraphics[width=0.33\textwidth]{save/Synthetic II/iterations/n=1000, m=1000, reg=0.001}
+    \includegraphics[width=0.33\textwidth]{save/Synthetic II/iterations/n=5000, m=5000, reg=0.001}
+    \includegraphics[width=0.33\textwidth]{save/Synthetic II/iterations/n=10000, m=10000, reg=0.001} \\
+    \includegraphics[width=0.33\textwidth]{save/Synthetic II/run_times/n=1000, m=1000, reg=0.001}
+    \includegraphics[width=0.33\textwidth]{save/Synthetic II/run_times/n=5000, m=5000, reg=0.001}
+    \includegraphics[width=0.33\textwidth]{save/Synthetic II/run_times/n=10000, m=10000, reg=0.001}
+    \caption{Performance of different algorithms on synthetic data II. Top: Gradient norm vs. iteration number for different problem sizes. Bottom: Gradient norm vs. run time.}
+    \label{fig:synthetic_2}
+\end{figure*}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{figure*}[p]
+    \centering
+    \includegraphics[width=0.33\textwidth]{save/MNIST/run_times/ID1=2, ID2=54698, norm=l1, reg=0.001}
+    \includegraphics[width=0.33\textwidth]{save/MNIST/run_times/ID1=239, ID2=43981, norm=l1, reg=0.001}
+    \includegraphics[width=0.33\textwidth]{save/MNIST/run_times/ID1=17390, ID2=49947, norm=l1, reg=0.001}
+    \caption{Performance of different algorithms on the MNIST data.}
+    \label{fig:mnist}
+\end{figure*}
+
+\begin{figure*}[htbp]
+    \includegraphics[width=0.33\textwidth]{save/Fashion-MNIST/run_times/ID1=2, ID2=54698, norm=l1, reg=0.001}
+    \includegraphics[width=0.33\textwidth]{save/Fashion-MNIST/run_times/ID1=239, ID2=43981, norm=l1, reg=0.001}
+    \includegraphics[width=0.33\textwidth]{save/Fashion-MNIST/run_times/ID1=17390, ID2=49947, norm=l1, reg=0.001}
+    \caption{Performance of different algorithms on the Fashion-MNIST data.}
+    \label{fig:fashion-mnist}
+\end{figure*}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\subsection{Synthetic data}
+\label{subsec:synthetic_data}
+We first consider two synthetic datasets that have been analyzed by existing sparse Newton methods \citep{tang2024accelerating,tang2024safe}:
+
+\textbf{Synthetic I:} $M=(M_{ij})$ has uniformly distributed entries, \emph{i.e.}, $M_{ij}\overset{iid}{\sim}\mathrm{Unif}(0,1)$, and $a=n^{-1}\mathbf{1}_n$, $b=m^{-1}\mathbf{1}_m$.
+
+\textbf{Synthetic II:} This setting approximates OT between two continuous distributions: an exponential distribution with mean one, and a normal mixture distribution $0.2\cdot N(1,0.2)+0.8\cdot N(3,0.5)$. The vectors $a$ and $b$ contain the discretized density function values of the two distributions, computed in the following way: let $x_{i}=5(i-1)/(n-1), i\in [n]$, and $y_{j}=5(j-1)/(m-1), j\in [m]$ be equally spaced points on $[0, 5]$, and let $f_{1}$ and $f_{2}$ be the density functions of the two distributions, respectively. Then set $\bar{a}_{i}=f_{1}(x_{i})$, $\bar{b}_{j}=f_{2}(y_{j})$, $a_{i}=\bar{a}_{i}/\left(\sum_{k=1}^{n}\bar{a}_{k}\right)$, and $b_{j}=\bar{b}_{j}/\left(\sum_{k=1}^{m}\bar{b}_{k}\right)$. The cost matrix is set to $M_{ij}=(x_{i}-y_{j})^{2}$.
+
+We simulate different scales of the problems, $n=m=1000$, $5000$, and $10000$, and do not run Newton or APDAGD for $n\ge 5000$, as they are too time-consuming. The results are given in Figures \ref{fig:synthetic_1} and \ref{fig:synthetic_2}.
+
+As can be observed from the plots, the existing sparse Newton method SSNS performs well in Synthetic II but is slow in Synthetic I in terms of the run time. This is because the Hessian matrix is relatively dense in I, and SSNS needs to keep a large number of non-zero elements in the approximate Hessian, leading to slow linear system solving. SPLR, on the other hand, performs well in both settings, showing its adaptivity to different OT settings.
+
+\subsection{OT between a pair of vectorized images}
+We then study the OT problem between a pair of images. Specifically, we randomly select two images from the MNIST \citep{lecun1998gradientbased} or Fashion-MNIST \citep{xiao2017fashionmnist} dataset, and let the $a$ and $b$ vectors be their flattened and normalized pixel values. The cost matrix holds the $\ell_{1}$-distances between individual pixels. These problems have a size of $n=m=784$, with results shown in Figure \ref{fig:mnist} (for MNIST data) and Figure \ref{fig:fashion-mnist} (for Fashion-MNIST data), respectively.
+
+The pattern in Figure \ref{fig:mnist} and Figure \ref{fig:fashion-mnist} shows that the Sinkhorn algorithm (\emph{i.e.}, BCD) and the first-order method APDAGD have a quite slow convergence speed, and the sparse Newton method SSNS significantly accelerates the optimization. With this foundation, SPLR performs even better, as it combines the advantages of both sparse Newton methods and low-rank quasi-Newton methods.
+
+
+
+\subsection{OT between two classes of images}
+
+Finally, we reproduce the ImageNet experiment in \citet{tang2024safe} that uses OT to characterize the difference between two data distributions. In particular, one class of images in the ImageNet dataset \citep{deng2009imagenet} is treated as one distribution, and each image in this class is an observation.
+
+This experiment is interesting in that different values of the regularization parameter $\eta$ have a large impact on the performance of algorithms, as shown in Figure \ref{fig:imagenet}. With a small regularization, $\eta=0.001$, BCD and APDAGD again have slow convergence speeds, and L-BFGS and SSNS perform quite well.
+The classic Newton method causes numerical issues, so it is not shown in the plot of $\eta=0.001$.
+When $\eta$ is increased to 0.01, all methods converge faster except for SSNS. This is because a larger $\eta$ typically leads to a more dense Hessian matrix, so SSNS cannot use a sparse matrix to approximate the Hessian well. In contrast, SPLR deals with this situation well via its low-rank term, making SPLR perform consistently well on different $\eta$ values.
+
+\begin{figure}[ht]
+  \centering
+  \includegraphics[width=0.4\textwidth]{save/ImageNet/run_times/CLASS1=tench, CLASS2=cassette player, dim=30, norm=l1, reg=0.01}\\
+  \includegraphics[width=0.4\textwidth]{save/ImageNet/run_times/CLASS1=tench, CLASS2=cassette player, dim=30, norm=l1, reg=0.001}
+  \caption{Performance of different algorithms on the ImageNet data. Top: $\eta=0.01$. Bottom: $\eta=0.001$.}
+  \label{fig:imagenet}
+\end{figure}
+
+
+\section{Conclusion}
+\label{sec:conclusion}
+In this paper, we propose the SPLR quasi-Newton method to solve large-scale entropic-regularized OT, as a further extension of existing sparse Newton methods including the SNS \citep{tang2024accelerating} and SSNS \citep{tang2024safe} methods.
+The design of the SPLR algorithm is highly dependent on the deepened theoretical understanding of the Hessian sparsification technique, which may be of interest by itself.
+On the other hand, the low-rank term introduced in SPLR effectively overcomes the limitation of sparse Newton methods in handling dense transport plans. In this sense, SPLR combines the best parts of purely low-rank-based methods (\emph{e.g.}, L-BFGS) and purely sparsification-based methods (\emph{e.g.}, SNS and SSNS).
+We anticipate that the technique developed in this paper would boost future exploration of highly efficient solvers for OT.
+
+One potential future research direction is to study dimension-independent convergence rates of OT solvers. One known result for the Sinkhorn algorithm is given in \citet{carlier2022linear}, which shows that the Sinkhorn algorithm has a linear convergence rate that only depends on $\Vert M \Vert_\infty/\eta$ and not the dimension $(n,m)$. It is of interest to understand whether SPLR and other related solvers also have such properties.
+
+
+
+\section*{Impact Statement}
+This paper presents work whose goal is to advance the field of Machine Learning. There are many potential societal consequences of our work, none which we feel must be specifically highlighted here.
+
+
+\section*{Acknowledgements}
+Yixuan Qiu’s work was supported in part by National Natural Science Foundation of China (12101389), Shanghai Pujiang Program (21PJC056), MOE Project of Key Research Institute of Humanities and Social Sciences (22JJD110001), and Shanghai Research Center for Data Science and Decision Technology.
+
+\bibliography{ref}
+\bibliographystyle{icml2025}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% APPENDIX
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\newpage
+\appendix
+\onecolumn
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+\section{Additional Experiment Details}
+
+\subsection{Effect of low-rank terms}
+To verify that the low-rank term in the SPLR algorithm indeed plays a significant role in improving the sparse Newton method, we conduct an ablation study that compares SPLR with a purely sparsification-based method. We consider a special sparse Newton method that has the same sparsification scheme and hyperparameter setting as SPLR, and its only difference from SPLR is the lack of the low-rank term in the approximate Hessian. We examine the performance of the two methods on the synthetic data introduced in Section \ref{subsec:synthetic_data}, with the results shown in Figures \ref{fig:effect_low_rank_i} and \ref{fig:effect_low_rank_ii}.
+
+It is clear from the plots that in all the settings, SPLR converges faster than its counterpart, which highlights the benefits of the low-rank term.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.33\textwidth]{save/Synthetic I - Ablation/iterations/n=1000, m=1000, reg=0.001}
+    \includegraphics[width=0.33\textwidth]{save/Synthetic I - Ablation/iterations/n=5000, m=5000, reg=0.001}
+    \includegraphics[width=0.33\textwidth]{save/Synthetic I - Ablation/iterations/n=10000, m=10000, reg=0.001} \\
+    \includegraphics[width=0.33\textwidth]{save/Synthetic I - Ablation/run_times/n=1000, m=1000, reg=0.001}
+    \includegraphics[width=0.33\textwidth]{save/Synthetic I - Ablation/run_times/n=5000, m=5000, reg=0.001}
+    \includegraphics[width=0.33\textwidth]{save/Synthetic I - Ablation/run_times/n=10000, m=10000, reg=0.001}
+    \caption{Comparing SPLR and sparse Newton method on synthetic data I. Top: Gradient norm vs. iteration number for different problem sizes. Bottom: Gradient norm vs. run time.}
+    \label{fig:effect_low_rank_i}
+\end{figure}
+
+\begin{figure}[!h]
+    \centering
+    \includegraphics[width=0.33\textwidth]{save/Synthetic II - Ablation/iterations/n=1000, m=1000, reg=0.001}
+    \includegraphics[width=0.33\textwidth]{save/Synthetic II - Ablation/iterations/n=5000, m=5000, reg=0.001}
+    \includegraphics[width=0.33\textwidth]{save/Synthetic II - Ablation/iterations/n=10000, m=10000, reg=0.001}\\
+    \includegraphics[width=0.33\textwidth]{save/Synthetic II - Ablation/run_times/n=1000, m=1000, reg=0.001}
+    \includegraphics[width=0.33\textwidth]{save/Synthetic II - Ablation/run_times/n=5000, m=5000, reg=0.001}
+    \includegraphics[width=0.33\textwidth]{save/Synthetic II - Ablation/run_times/n=10000, m=10000, reg=0.001}
+    \caption{Comparing SPLR and sparse Newton method on synthetic data II.}
+    \label{fig:effect_low_rank_ii}
+\end{figure}
+
+\subsection{Effect of cost matrices}
+\label{appendix:extra-cost}
+In this section, we include additional test examples in which the cost matrices are formed by the Euclidean distance instead of the $\ell_1$ distance. Figures \ref{fig:mnist_l2} and \ref{fig:imagenet_l2} show the results on the (Fashion-)MNIST data and ImageNet data, respectively.
+Clearly, in all settings, SPLR is among the fastest solvers.
+
+\begin{figure*}[h]
+    \centering
+    \includegraphics[width=0.33\textwidth]{save/MNIST - Extra/run_times/ID1=2, ID2=54698, norm=l2, reg=0.001}
+    \includegraphics[width=0.33\textwidth]{save/MNIST - Extra/run_times/ID1=239, ID2=43981, norm=l2, reg=0.001}
+    \includegraphics[width=0.33\textwidth]{save/MNIST - Extra/run_times/ID1=17390, ID2=49947, norm=l2, reg=0.001}\\
+    \includegraphics[width=0.33\textwidth]{save/FashionMNIST - Extra/run_times/ID1=2, ID2=54698, norm=l2, reg=0.001}
+    \includegraphics[width=0.33\textwidth]{save/FashionMNIST - Extra/run_times/ID1=239, ID2=43981, norm=l2, reg=0.001}
+    \includegraphics[width=0.33\textwidth]{save/FashionMNIST - Extra/run_times/ID1=17390, ID2=49947, norm=l2, reg=0.001}
+    \caption{Performance of different algorithms on the MNIST (top row) and Fashion-MNIST (bottom row) data using the $\ell_2$-norm to form the cost matrices.}
+    \label{fig:mnist_l2}
+\end{figure*}
+
+\begin{figure*}[h]
+    \centering
+    \includegraphics[width=0.33\textwidth]{save/ImageNet - Extra/run_times/CLASS1=tench, CLASS2=church, dim=30, norm=l2, reg=0.001}
+    \includegraphics[width=0.33\textwidth]{save/ImageNet - Extra/run_times/CLASS1=tench, CLASS2=garbage truck, dim=30, norm=l2, reg=0.001}
+    \includegraphics[width=0.33\textwidth]{save/ImageNet - Extra/run_times/CLASS1=tench, CLASS2=golf ball, dim=30, norm=l2, reg=0.001}
+    \caption{Performance of different algorithms on the ImageNet data using the $\ell_2$-norm to form the cost matrices.}
+    \label{fig:imagenet_l2}
+\end{figure*}
+
+\subsection{Effect of regularization parameters}
+\label{appendix:extra-eta}
+Finally, we further validate the performance of the SPLR algorithm under the regularization parameter setting $\eta=0.01$.
+Figures \ref{fig:synthetic_eta_0.01}, \ref{fig:mnist_eta_0.01}, and
+\ref{fig:imagenet_eta_0.01} show the experiment results on the synthetic data, (Fashion-)MNIST data, and ImageNet data, respectively.
+
+In summary, all these experiments show similar patterns to those in Section \ref{sec:experiments}, validating the desirable performance of SPLR.
+
+\begin{figure*}[p]
+    \centering
+    \includegraphics[width=0.33\textwidth]{save/Synthetic I - Extra/run_times/n=1000, m=1000, reg=0.01}
+    \includegraphics[width=0.33\textwidth]{save/Synthetic I - Extra/run_times/n=5000, m=5000, reg=0.01}
+    \includegraphics[width=0.33\textwidth]{save/Synthetic I - Extra/run_times/n=10000, m=10000, reg=0.01}\\
+    \includegraphics[width=0.33\textwidth]{save/Synthetic II - Extra/run_times/n=1000, m=1000, reg=0.01}
+    \includegraphics[width=0.33\textwidth]{save/Synthetic II - Extra/run_times/n=5000, m=5000, reg=0.01}
+    \includegraphics[width=0.33\textwidth]{save/Synthetic II - Extra/run_times/n=10000, m=10000, reg=0.01}
+    \caption{Performance of different algorithms on synthetic data I (top row) and synthetic data II (bottom row) with $\eta=0.01$.}
+    \label{fig:synthetic_eta_0.01}
+\end{figure*}
+
+\begin{figure*}[p]
+    \centering
+    \includegraphics[width=0.33\textwidth]{save/MNIST - Extra/run_times/ID1=2, ID2=54698, norm=l1, reg=0.01}
+    \includegraphics[width=0.33\textwidth]{save/MNIST - Extra/run_times/ID1=239, ID2=43981, norm=l1, reg=0.01}
+    \includegraphics[width=0.33\textwidth]{save/MNIST - Extra/run_times/ID1=17390, ID2=49947, norm=l1, reg=0.01}\\
+    \includegraphics[width=0.33\textwidth]{save/FashionMNIST - Extra/run_times/ID1=2, ID2=54698, norm=l1, reg=0.01}
+    \includegraphics[width=0.33\textwidth]{save/FashionMNIST - Extra/run_times/ID1=239, ID2=43981, norm=l1, reg=0.01}
+    \includegraphics[width=0.33\textwidth]{save/FashionMNIST - Extra/run_times/ID1=17390, ID2=49947, norm=l1, reg=0.01}
+    \caption{Performance of different algorithms on the MNIST (top row) and Fashion-MNIST (bottom row) data with $\eta=0.01$.}
+    \label{fig:mnist_eta_0.01}
+\end{figure*}
+
+\begin{figure*}[p]
+    \centering
+    \includegraphics[width=0.33\textwidth]{save/ImageNet - Extra/run_times/CLASS1=tench, CLASS2=church, dim=30, norm=l1, reg=0.01}
+    \includegraphics[width=0.33\textwidth]{save/ImageNet - Extra/run_times/CLASS1=tench, CLASS2=garbage truck, dim=30, norm=l1, reg=0.01}
+    \includegraphics[width=0.33\textwidth]{save/ImageNet - Extra/run_times/CLASS1=tench, CLASS2=golf ball, dim=30, norm=l1, reg=0.01}
+    \caption{Performance of different algorithms on the ImageNet data with $\eta=0.01$.}
+    \label{fig:imagenet_eta_0.01}
+\end{figure*}
+
+\subsection{Computing environment}
+
+All experiments in this article are conducted on a personal computer with an Intel i9-13900K CPU, 32 GB memory, and a Ubuntu 25.04 operating system.
+
+\newpage
+
+\section{Proofs of Theorems}
+\subsection{Technical Lemmas}
+
+\begin{lemma} \label{lem:M-inv-block-sign}
+Let $M$ be a matrix of the form
+\[
+M=\begin{bmatrix}D_{1} & R\\
+R^{T} & D_{2}
+\end{bmatrix},
+\]
+where $D_{1}\in\mathbb{R}^{r\times r}$ and $D_{2}\in\mathbb{R}^{s\times s}$
+are diagonal matrices, and $R\in\mathbb{R}^{r\times s}$ has strictly
+positive entries. Suppose that $M$ is positive definite, and $M^{-1}$
+has the partition
+\[
+M^{-1}=\begin{bmatrix}A_{r\times r} & B_{r\times s}\\
+B^{T} & C_{s\times s}
+\end{bmatrix},
+\]
+and then we have $A>0$, $C>0$, and $B<0$, where the inequality
+signs apply elementwisely.
+\end{lemma}
+
+\begin{proof}
+Since $M$ is positive definite, all of its diagonal elements must
+be strictly positive, implying that both $D_{1}$ and $D_{2}$ are
+invertible. By the inversion formula of block matrices, we have
+\begin{align*}
+A & =(D_{1}-RD_{2}^{-1}R^{T})^{-1},\\
+C & =(D_{2}-R^{T}D_{1}^{-1}R)^{-1},\\
+B & =-D_{1}^{-1}R(D_{2}-R^{T}D_{1}^{-1}R)^{-1}=-D_{1}^{-1}RC.
+\end{align*}
+Clearly, $J\coloneqq D_{1}-RD_{2}^{-1}R^{T}$ is the Schur complement
+of the block $D_{2}$ of the matrix $M$. By the properties of the
+Schur complement, we know that $J$ is positive definite, and hence
+it is nonsingular.
+
+Moreover, since $R$ has strictly positive entries and $D_{2}$ has
+positive diagonal elements, we have that $RD_{2}^{-1}R^{T}$ has strictly
+positive entries. Therefore, $J$ can be represented in the form $J=sI-L$,
+where $L>0$, $s\ge\rho(L)$, and $\rho(\cdot)$ stands for the spectral
+radius. Clearly, $J$ is irreducible, so by Theorem A(ii) of \citet{meyer1978singular},
+$A=J^{-1}$ has strictly positive entries. The same argument can be
+used to prove that $C>0$.
+
+Finally, recall that $B=-D_{1}^{-1}RC$. Since $R>0$, $C>0$, and
+$D_{1}$ has positive diagonal elements, we conclude that $B<0$.
+
+\end{proof}
+
+\begin{lemma} \label{lem:M-eigenvector-sign}
+Let $M$ be a matrix of the form
+\[
+M=\begin{bmatrix}A_{r\times r} & -B_{r\times s}\\
+-B^{T} & C_{s\times s}
+\end{bmatrix},
+\]
+where $A>0$, $B>0$, $C>0$, and the inequality signs apply elementwisely.
+Then $M$ has a positive eigenvalue $r$ such that any other eigenvalue
+of $M$ in absolute value is strictly smaller than $r$, and the eigenvector
+$v=(v_{1}^{T},v_{2}^{T})^{T}$associated with $r$, where $v_{1}\in\mathbb{R}^{r}$
+and $v_{2}\in\mathbb{R}^{s}$, can be normalized such that $v_{1}>0$
+and $v_{2}<0$.
+\end{lemma}
+
+\begin{proof}
+Define
+\[
+Q=\begin{bmatrix}I_{r} & O\\
+O & -I_{s}
+\end{bmatrix},
+\]
+and then it is easy to show that $Q^{-1}=Q$, and
+\[
+QMQ^{-1}=\begin{bmatrix}I_{r} & O\\
+O & -I_{s}
+\end{bmatrix}\begin{bmatrix}A & -B\\
+-B^{T} & C
+\end{bmatrix}\begin{bmatrix}I_{r} & O\\
+O & -I_{s}
+\end{bmatrix}=\begin{bmatrix}A & B\\
+B^{T} & C
+\end{bmatrix}\coloneqq\tilde{M}.
+\]
+Therefore, $M$ and $\tilde{M}$ are similar to each other, and hence
+they must share the same eigenvalues. Clearly, $\tilde{M}$ is a positive
+matrix, so by the Perron--Frobenius theorem, it must have a positive
+and simple eigenvalue $r$ such that any other eigenvalue of $\tilde{M}$
+in absolute value is strictly smaller than $r$. Moreover, $\tilde{M}$
+has an eigenvector $\tilde{v}=(\tilde{v}_{1}^{T},\tilde{v}_{2}^{T})^{T}$
+such that $\tilde{v}_{1}\in\mathbb{R}^{r}$, $\tilde{v}_{2}\in\mathbb{R}^{s}$,
+$\tilde{v}>0$, and $\tilde{M}\tilde{v}=r\tilde{v}$.
+
+Now let $v=Q^{-1}\tilde{v}$, and then
+\[
+Mv=MQ^{-1}\tilde{v}=Q^{-1}QMQ^{-1}\tilde{v}=Q^{-1}\tilde{M}\tilde{v}=Q^{-1}r\tilde{v}=rv.
+\]
+Therefore, $v$ is an eigenvector of $M$. Note that
+\[
+v=Q^{-1}\tilde{v}=\begin{bmatrix}I_{r} & O\\
+O & -I_{s}
+\end{bmatrix}\begin{bmatrix}\tilde{v}_{1}\\
+\tilde{v}_{2}
+\end{bmatrix}=\begin{bmatrix}\tilde{v}_{1}\\
+-\tilde{v}_{2}
+\end{bmatrix},
+\]
+so $v_{1}=\tilde{v}_{1}>0$ and $v_{2}=-\tilde{v}_{2}<0$, which implies
+the stated result.
+\end{proof}
+
+\subsection{Proof of Theorem \ref{thm:1row-1col-assumption}}
+\begin{proof}
+According to the sparsification scheme, the first row and first column of $\tilde{T}_{\Omega^*}$ is strictly greater than zero:
+\[
+(\tilde{T}_{\Omega^*})_{1\cdot} > 0,\ 
+(\tilde{T}_{\Omega^*})_{\cdot 1} > 0.
+\]
+
+Suppose that $H_{\Omega^*}$ is of the form:
+\[
+H_{\Omega^*} = \begin{bmatrix}
+    A_{n \times n} & B_{n \times (m - 1)} \\
+    C_{(m - 1) \times n} & D_{(m - 1) \times (m - 1)} \\
+\end{bmatrix},
+\]
+
+so in $H_{\Omega^*}$ we have:
+\[
+A=\mathbf{diag}(A) > 0,\ D=\mathbf{diag}(D) > 0,\ B_{1 \cdot} > 0,\ B_{\cdot 1} > 0,\ C_{1 \cdot} > 0,\ C_{\cdot 1} > 0.
+\]
+
+To show $H_{\Omega^*}^4 > 0$, we first condider elements of $H_{\Omega^*}^2$:
+\begin{enumerate}[label=\roman*.]
+    \item {
+        When $i \leq n, j \leq n$, $(H_{\Omega^*})^2_{ij} = \langle (H_{\Omega^*})_{i \cdot}, (H_{\Omega^*})_{j \cdot} \rangle \geq B_{i, 1} B_{j, 1} > 0$.
+    }
+    \item {
+        When $i > n, j > n$, $(H_{\Omega^*})^2_{ij} = \langle (H_{\Omega^*})_{i \cdot}, (H_{\Omega^*})_{j \cdot} \rangle \geq C_{i - n, 1} C_{j - n, 1} > 0$.
+    }
+    \item {
+        When $i \leq n, j = n + 1$, $(H_{\Omega^*})^2_{ij} = \langle (H_{\Omega^*})_{i \cdot}, (H_{\Omega^*})_{j \cdot} \rangle \geq A_{i, i} C_{1, i} > 0$.
+    }
+    \item {
+        When $i = n + 1, j \leq n$, $(H_{\Omega^*})^2_{ij} = \langle (H_{\Omega^*})_{i \cdot}, (H_{\Omega^*})_{j \cdot} \rangle \geq A_{j, j} C_{1, j} > 0$.
+    }
+    \item {
+        When $i = 1, j > n$, $(H_{\Omega^*})^2_{ij} = \langle (H_{\Omega^*})_{i \cdot}, (H_{\Omega^*})_{j \cdot} \rangle \geq B_{1, j - n} D_{j-n, j-n} > 0$.
+    }
+    \item {
+        When $i > n, j = 1$, $(H_{\Omega^*})^2_{ij} = \langle (H_{\Omega^*})_{i \cdot}, (H_{\Omega^*})_{j \cdot} \rangle \geq B_{1, i - n} D_{i-n, i-n} > 0$.
+    }
+\end{enumerate}
+
+So we can assume that $H_{\Omega^*}^2$ is of the form:
+\[
+H_{\Omega^*}^2 = \begin{bmatrix}
+    A'_{n \times n} & B'_{n \times (m - 1)} \\
+    C'_{(m - 1) \times n} & D'_{(m - 1) \times (m - 1)} \\
+\end{bmatrix},
+\]
+where
+\[
+A' > 0,\ D' > 0,\ B'_{1 \cdot} > 0,\ B'_{\cdot 1} > 0,\ C'_{1 \cdot} > 0,\ C'_{\cdot 1} > 0.
+\]
+
+Then consider elements of $H_{\Omega^*}^4$:
+\begin{enumerate}[label=\roman*.]
+    \item {
+        When $i \leq n, j \leq n$, $(H_{\Omega^*}^4)_{ij} = \langle (H_{\Omega^*}^2)_{i \cdot}, (H_{\Omega^*}^2)_{j \cdot} \rangle \geq A'_{i, 1} A'_{j, 1} > 0$.
+    }
+    \item {
+        When $i > n, j > n$, $(H_{\Omega^*}^4)_{ij} = \langle (H_{\Omega^*}^2)_{i \cdot}, (H_{\Omega^*}^2)_{j \cdot} \rangle \geq D'_{1, i-n} D'_{1, j-n} > 0$.
+    }
+    \item {
+        When $i \leq n, j > n$, $(H_{\Omega^*}^4)_{ij} = \langle (H_{\Omega^*}^2)_{i \cdot}, (H_{\Omega^*}^2)_{j \cdot} \rangle \geq C'_{1, i} D'_{1, j-n} > 0$.
+    }
+    \item {
+        When $i > n, j \leq n$, $(H_{\Omega^*}^4)_{ij} = \langle (H_{\Omega^*}^2)_{i \cdot}, (H_{\Omega^*}^2)_{j \cdot} \rangle \geq C'_{1, j} D'_{1, i-n} > 0$.
+    }
+\end{enumerate}
+
+Overall, we have $(H_{\Omega^*})^p > 0$ for $p=4$, and hence $H_{\Omega^*}$ satisfies Assumption \ref{assump:positive-power}.
+\end{proof}
+
+\begin{lemma} \label{lem:eigenvector-positivity-differentiability}
+    Given a sparsification scheme $\Omega$ that satisfies Assumption \ref{assump:positive-power}, the sparsified Hessian matrix $H_{\Omega}$ has the following properties:
+    \begin{enumerate} %[label=\roman*.]
+        \item The eigenvector $\mathbf{u}(H_{\Omega})$ corresponding to $\lambda_{\max}(H_{\Omega})$ can be normalized to have strictly positive entries; 
+        \item There exists a neighborhood $N(H_{\Omega})$ of $H_{\Omega}$ such that $\lambda_{\max}(H), H \in N(H_{\Omega})$ is differentiable.
+    \end{enumerate}
+\end{lemma}
+
+\begin{proof}
+Since $H_{\Omega}$ satisfies Assumption \ref{assump:positive-power}, there exists an integer $k > 0$ such that $H_{\Omega}^k > 0$.
+% According to \citet{khim2007frobenius},
+According to the Perron--Frobenius theorem,
+$\mathbf{u}(H_{\Omega}^k)$ can be normalized to have strictly positive entries and $\lambda_{\max}(H_{\Omega}^k)$ is strictly greater than all other eigenvalues of $H_{\Omega}^k$. Since $H_{\Omega}^k$ and $H_{\Omega}$ have the same eigenvectors, we can conclude that $\mathbf{u}(H_{\Omega}) = \mathbf{u}(H_{\Omega}^k)$ can be normalized to have strictly positive entries and the corresponding eigenvalue $\lambda_{\max}(H_{\Omega})$ is strictly greater than all other eigenvalues of $H_{\Omega}$. This means that $\lambda_{\max}(H_{\Omega})$ is a simple positive eigenvalue and therefore $\lambda_{\max}$ is differentiable at $H_{\Omega}$ according to Theorem 1 of \citet{magnus1985differentiating}.
+\end{proof}
+
+\begin{lemma} \label{lem:monotonicity-of-assumption}
+    Given two sparsification schemes $\Omega_0$ and $\Omega_1$, suppose that $\Omega_1 \subseteq \Omega_0$. If $\Omega_1$ satisfies Assumption \ref{assump:positive-power}, then $\Omega_0$ also satisfies Assumption \ref{assump:positive-power}.
+\end{lemma}
+\begin{proof}
+    Define $\Omega_{\delta} := \Omega_0 \backslash \Omega_1$, and $\Delta := \begin{bmatrix}
+        O_{n \times n} & \tilde{T}_{\Omega_{\delta}} \\
+        \tilde{T}_{\Omega_{\delta}}^T & O_{(m-1) \times (m-1)} \\
+    \end{bmatrix}$. Then we have
+    \[
+    H_{\Omega_0} = H_{\Omega_1} + \Delta.
+    \]
+
+Since $\Omega_1$ satisfies Assumption \ref{assump:positive-power}, there must exist an integer $k>0$ such that $(H_{\Omega_1})^k > 0$. Then for $H_{\Omega_0}$, we have:
+    \[
+        (H_{\Omega_0})^k = (H_{\Omega_1} + \Delta)^k \geq (H_{\Omega_1})^k + \Delta^k \geq (H_{\Omega_1})^k > 0,
+    \]
+where all inequality signs are elementwise. This means that $H_{\Omega_0}$ also satisfies Assumption \ref{assump:positive-power}.
+\end{proof}
+
+\subsection{Proof of Theorem \ref{thm:incremental-sparsification}}
+\begin{proof}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%      lambda_max part       %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+First, we prove $\lambda_{\max}(H_{\Omega_0}) > \lambda_{\max}(H_{\Omega_1})$.
+
+Define $p = i, q = n + j, \beta = (H_{\Omega_0})_{pq}$, then the difference of Hessian is:
+\begin{equation*}
+    H_{\Omega_1} - H_{\Omega_0} = -\beta \left( \mathbf{e}_p \mathbf{e}_q^{T} + \mathbf{e}_q \mathbf{e}_p^{T} \right) := -\beta \mathbf{J},
+\end{equation*}
+
+Define $M(\kappa) = H_{\Omega_0} - \kappa J, l(\kappa) = \lambda_{\max}(M(\kappa)), \kappa \in \mathbb{R}$, then we have:
+\begin{equation*}
+    \lambda_{\max}(H_{\Omega_1}) - \lambda_{\max}(H_{\Omega_0}) = l(\beta) - l(0),
+\end{equation*}
+
+Since $H_{\Omega_1}$ satisfies Assumption \ref{assump:positive-power}, we can show that $\lambda_{\max}$ is differentiable on $\{ M(\kappa) | \kappa \in [0, \beta]\}$ according to Lemma \ref{lem:eigenvector-positivity-differentiability}.
+Suppose the eigenvector associated with $\lambda_{\max}(M(\kappa))$ is $\mathbf{u}_{\kappa}$, then the derivative at $M(\kappa)$ is:
+\begin{equation*}
+    \frac{\partial \lambda_{\max}}{\partial M} \Big|_{M = M(\kappa)} = \mathbf{u}_{\kappa} \mathbf{u}_{\kappa}^{T}
+\end{equation*}
+thus $l'(\kappa) = \langle \mathbf{u}_{\kappa} \mathbf{u}_{\kappa}^T, -J \rangle$.
+According to the Lagrange's mean value theorem, $\exists \xi \in (0, \beta)$ such that:
+\begin{equation} \label{eq:lambda-max-diff}
+    \begin{aligned}
+        l(\beta) - l(0) &= l'(\xi) (\beta - 0) \\
+        &= \langle \mathbf{u}_{\xi} \mathbf{u}_{\xi}^{T}, -J \rangle \beta \\
+        &= -\beta \left[ \boldsymbol{tr}(\mathbf{u}_{\xi} \mathbf{u}_{\xi}^{T} \mathbf{e}_p \mathbf{e}_q^T)
+                        +\boldsymbol{tr}(\mathbf{u}_{\xi} \mathbf{u}_{\xi}^{T} \mathbf{e}_q \mathbf{e}_p^T) \right] \\
+        &= -\beta \left[ \boldsymbol{tr}(\mathbf{u}_{\xi}^{T} \mathbf{e}_p \mathbf{e}_q^T \mathbf{u}_{\xi})
+                        +\boldsymbol{tr}(\mathbf{u}_{\xi}^{T} \mathbf{e}_q \mathbf{e}_p^T \mathbf{u}_{\xi}) \right] \\
+        &= -2\beta (\mathbf{u}_{\xi})_p (\mathbf{u}_{\xi})_q
+    \end{aligned}
+\end{equation}
+
+According to Lemma \ref{lem:eigenvector-positivity-differentiability},
+$\mathbf{u}_{\xi}$ can be normalized to have strictly positive entries
+so that $(\mathbf{u}_{\xi})_p(\mathbf{u}_{\xi})_q > 0$,
+which means $l(\beta) - l(0) = \lambda_{\max}(H_{\Omega_1}) - \lambda_{\max}(H_{\Omega_0}) < 0$.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%      lambda_min part       %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+Then we prove $\lambda_{\min}(H_{\Omega_0}) < \lambda_{\min}(H_{\Omega_1})$.
+
+According to \citet{tang2024safe}, we have $M(\kappa) \succ 0$ thus invertible,
+then according to Lemma \ref{lem:M-inv-block-sign}, $M(\kappa)^{-1}$ is of the form:
+\[
+M(\kappa)^{-1} = \begin{pmatrix}
+    A & B \\
+    B^T & C \\
+\end{pmatrix}
+\]
+where $A > 0, C > 0, B < 0$. Then according to Lemma \ref{lem:M-eigenvector-sign}, we can show that $\lambda_{\max}(M(\kappa)^{-1})$ is a simple positive eigenvalue, the corresponding eigenvector $\mathbf{v}_{\kappa} = (\mathbf{v}_1^T, \mathbf{v}_2^T)^T$ where $\mathbf{v}_1 \in \mathbb{R}^{n}, \mathbf{v}_2 \in \mathbb{R}^{m-1}$ can be normalized such that $\mathbf{v}_1 > 0, \mathbf{v}_2 < 0$. Since $\mathbf{v}_{\kappa}$ is also the eigenvector of $M(\kappa)$ corresponding to $\lambda_{\min}(M(\kappa))$, we can tell that $(\mathbf{v}_{\kappa})_p (\mathbf{v}_{\kappa})_q < 0$, where $p \leq n, q > n$.
+
+Define $h(\kappa) = \lambda_{\min}(M(\kappa))$,
+then similar to \eqref{eq:lambda-max-diff} we have
+$h(\beta) - h(0) = -2 \beta (\mathbf{v}_{\xi})_p (\mathbf{v}_{\xi})_q$,
+where $\xi \in (0, \beta)$.
+Recall that $(\mathbf{v}_{\xi})_p (\mathbf{v}_{\xi})_q < 0$,
+so $h(\beta) - h(0) > 0$, which means $\lambda_{\min}(H_{\Omega_0}) < \lambda_{\min}(H_{\Omega_1})$.
+\end{proof}
+
+\subsection{Proof of Theorem \ref{thm:eigenvalue_B}}
+By definition,
+\[
+B_{k+1}=H_{\Omega}^{k+1}+auu^{T}+bvv^{T}+\tau_{k+1} I,
+\]
+where
+\[
+u=y_{k},\ v=(H_{\Omega}^{k+1}+\tau_{k+1})s_{k},\ a=\frac{1}{y_{k}^{T}s_{k}},\ b=-\frac{1}{s_{k}^{T}(H_{\Omega}^{k+1}+\tau_{k+1})s_{k}}.
+\]
+By the design of the algorithm, we have $y_k^T s_k>0$, so $auu^{T}$ and $bvv^{T}$ are rank-one matrices with $a>0$ and $b<0$. Then we have
+\[
+\lambda_{\max}(auu^T)=au^Tu,\quad \lambda_{\max}(bvv^T)=0.
+\]
+It is well known that $\lambda_{\max}(A+B)\le \lambda_{\max}(A)+\lambda_{\max}(B)$ for symmetric matrices $A$ and $B$, so
+\[
+\lambda_{\max}(B_{k+1})\le \lambda_{\max}(H_{\Omega}^{k+1}) + \frac{y_{k}^{T}y_{k}}{y_{k}^{T}s_{k}}+\tau_{k+1}.
+\]
+Corollary \ref{cor:incremental-sparsification} shows that $\lambda_{\max}(H_{\Omega}^{k+1})\le \lambda_{\max}(H_{k+1})$, and then by the assumption of the theorem, we have
+\[
+\lambda_{\max}(H_{\Omega}^{k+1})\le \lambda_{\max}(H_{k+1})\le U.
+\]
+On the other hand, since $f(x)$ is twice differentiable, the mean value theorem indicates that
+\[
+y_k=g(x_{k+1})-g(x_k)=\bar{G}_k(x_{k+1}-x_k)=\bar{G}_k s_k,
+\]
+where
+\[
+\bar{G}_k=\int_{0}^{1}H((1-t)x_{k}+t x_{k+1})\mathrm{d}t.
+\]
+
+Again by the assumption, $(1-t)x_{k}+t x_{k+1}\in D$ for all $t\in [0,1]$, so for any $v\in\mathbb{R}^{n+m-1}$,
+\[
+v^T \bar{G}_k v=\int_{0}^{1} v^T H((1-\tau)x_{k}+\tau x_{k+1}) v\mathrm{d}\tau \ge \int_{0}^{1} L v^T v\mathrm{d}\tau = Lv^T v,
+\]
+and similarly, $v^T \bar{G}_k v\le U v^T v$. This indicates that
+\[
+0 < L \le \lambda_{\min}(\bar{G}_k) \le \lambda_{\max}(\bar{G}_k) \le U.
+\]
+As a result,
+\[
+au^T u=\frac{y_k^T y_k}{y_k^T s_k}=\frac{s_{k}^{T}\bar{G}_{k}^{2}s_{k}}{s_{k}^{T}\bar{G}_{k}s_{k}}=\frac{w^T \bar{G}_k w}{w^T w},
+\]
+where $w=(\bar{G}_k)^{1/2}s_k$ is well-defined since $\bar{G}_k$ is positive definite. Then by the properties of eigenvalues, we get $au^T u\le \lambda_{\max}(\bar{G}_k) \le U$. Overall, we have
+\[
+\lambda_{\max}(B_{k+1})\le \lambda_{\max}(H_{\Omega}^{k+1}) + \frac{y_{k}^{T}y_{k}}{y_{k}^{T}s_{k}}+\tau_{k+1}\le 2U+\tau_{\max}.
+\]
+
+Now consider the inverse of $B_{k+1}$. Using the Sherman--Morrison--Woodbury
+formula, we can obtain
+\[
+B_{k+1}^{-1}=U^{T}(H_{\Omega}^{k+1}+\tau_{k+1} I)^{-1}U+\frac{1}{y_{k}^{T}s_{k}}\cdot s_{k}s_{k}^{T},
+\]
+where $U=I-(y_{k}^{T}s_{k})^{-1}y_{k}s_{k}^{T}$. Let $\bar{H}_{k+1}=H_{\Omega}^{k+1}+\tau_{k+1} I$, and then $\bar{H}_{k+1}$ is positive definite as $H_{\Omega}^{k+1}$ is positive definite. So for any vector $v\in\mathbb{R}^{n+m-1}$,
+\[
+v^{T}U^{T}\bar{H}_{k+1}^{-1}Uv\le\lambda_{\max}(\bar{H}_{k+1}^{-1})\Vert Uv\Vert^{2}=\frac{v^{T}U^{T}Uv}{\lambda_{\min}(\bar{H}_{k+1})}\le\frac{\lambda_{\max}(U^{T}U)}{\lambda_{\min}(\bar{H}_{k+1})}\cdot\Vert v\Vert^{2}.
+\]
+Note that
+\[
+U^{T}U=I-\frac{1}{y_{k}^{T}s_{k}}(y_{k}s_{k}^{T}+s_{k}y_{k}^{T})+\frac{y_{k}^{T}y_{k}}{(y_{k}^{T}s_{k})^{2}}\cdot s_{k}s_{k}^{T}.
+\]
+Since $U^{T}U$ is positive semi-definite, we have $\lambda_{\max}(U^{T}U)=\Vert U^{T}U\Vert$,
+where $\Vert\cdot\Vert$ represents the operator norm for matrices.
+Therefore,
+\begin{align*}
+\left\Vert \frac{1}{y_{k}^{T}s_{k}}(y_{k}s_{k}^{T}+s_{k}y_{k}^{T})\right\Vert  & \le\frac{2\Vert y_{k}s_{k}^{T}\Vert}{y_{k}^{T}s_{k}}=\frac{2\Vert\bar{G}_{k}s_{k}s_{k}^{T}\Vert}{s_{k}^{T}\bar{G}_{k}s_{k}}\\
+ & \le\frac{2\Vert\bar{G}_{k}\Vert\cdot\Vert s_{k}s_{k}^{T}\Vert}{s_{k}^{T}\bar{G}_{k}s_{k}}=\frac{2\Vert\bar{G}_{k}\Vert\cdot s_{k}^{T}s_{k}}{s_{k}^{T}\bar{G}_{k}s_{k}}\\
+ & \le\frac{2U}{L}.
+\end{align*}
+Similarly,
+\[
+\left\Vert \frac{y_{k}^{T}y_{k}}{(y_{k}^{T}s_{k})^{2}}\cdot s_{k}s_{k}^{T}\right\Vert =\frac{y_{k}^{T}y_{k}}{y_{k}^{T}s_{k}}\cdot\frac{s_{k}^{T}s_{k}}{s_{k}^{T}\bar{G}_{k}s_{k}}\le\frac{U}{L}.
+\]
+So overall, $\Vert U^{T}U\Vert\le1+3U/L$, and then
+\[
+\lambda_{\max}\left(U^{T}\bar{H}_{k+1}^{-1}U\right)\le\frac{\lambda_{\max}(U^{T}U)}{\lambda_{\min}(\bar{H}_{k+1})}\le\frac{1}{L}\left(1+\frac{3U}{L}\right).
+\]
+Finally, we obtain
+\[
+\lambda_{\max}(B_{k+1}^{-1})\le\frac{1}{L}\left(1+\frac{3U}{L}\right)+\frac{s_{k}^{T}s_{k}}{y_{k}^{T}s_{k}}\le\frac{1}{L}\left(2+\frac{3U}{L}\right).
+\]
+Clearly, $B_{k+1}^{-1}$ is positive semi-definite, so
+\[
+\lambda_{\min}(B_{k+1})=\frac{1}{\lambda_{\max}(B_{k+1}^{-1})}\ge\left(2+\frac{3U}{L}\right)^{-1}L.
+\]
+
+\subsection{Proof of Corollary \ref{cor:global_convergence}}
+Consider the level set $D=\{x:f(x)\le f(x_0)\}$. Clearly, $D$ is a closed convex set, and there exist constants $L,U>0$ such that $\lambda_{\min}(H(x))\ge L$ and $\lambda_{\max}(H(x))\le U$ for all $x\in D$.
+
+Let $\theta_k$ be the angle between $-g_k$ and the search direction $p_k=-B_k^{-1}g_k$. Then clearly,
+\begin{equation}
+\label{eq:cos_theta}
+\cos \theta_k=\frac{-g_k^T p_k}{\Vert g_k \Vert \cdot \Vert p_k\Vert}=\frac{p_k^T B_k p_k}{\Vert B_k p_k \Vert \cdot \Vert p_k\Vert} \ge \frac{\lambda_{\min}(B_k)\Vert p_k\Vert^2}{\lambda_{\max}(B_k)\Vert p_k\Vert^2}=\frac{\lambda_{\min}(B_k)}{\lambda_{\max}(B_k)}.
+\end{equation}
+Then by Theorem \ref{thm:eigenvalue_B}, we have
+\[
+\cos \theta_k \ge \frac{\lambda_{\min}(B_k)}{\lambda_{\max}(B_k)}\ge c\coloneqq \left(2+\frac{3U}{L}\right)^{-1}\frac{L}{2U+\tau_{\max}}>0.
+\]
+Zoutendijk's theorem (see for example Theorem 3.2 of \citealp{nocedal2006numerical}) shows that
+\[
+\sum_{k\ge 0} (\cos\theta_k)^2 \Vert g_k \Vert^2 < \infty,
+\]
+so we must have
+\[
+c^2\sum_{k\ge 0} \Vert g_k \Vert^2 < \infty,
+\]
+which implies that $\Vert g_k \Vert\rightarrow 0$ as $k\rightarrow\infty$.
+
+\subsection{Proof of Theorem \ref{thm:linear_convergence}}
+Similar to the proof of Corollary \ref{cor:global_convergence}, consider the level set $D=\{x:f(x)\le f(x_0)\}$, and we have $\lambda_{\min}(H(x))\ge L$ and $\lambda_{\max}(H(x))\le U$ for all $x\in D$.
+
+Lemma 2.1 of \citet{byrd1987global} shows that for any $k\ge 1$,
+\[
+f(x_{k+1})-f^*\le [1-L c_1 \tilde{c}_2\cos^2\theta_k]\cdot [f(x_k)-f^*],
+\]
+where $\tilde{c}_2=(1-c_2)/U$, and $\cos\theta_k$ is defined in \eqref{eq:cos_theta}. Take
+\[
+r=1-Lc_1\tilde{c}_2c^2,\quad c= \left(2+\frac{3U}{L}\right)^{-1}\frac{L}{2U+\tau_{\max}},
+\]
+and then we get the desired result.
+
+\end{document}
+
+
+% This document was modified from the file originally made available by
+% Pat Langley and Andrea Danyluk for ICML-2K. This version was created
+% by Iain Murray in 2018, and modified by Alexandre Bouchard in
+% 2019 and 2021 and by Csaba Szepesvari, Gang Niu and Sivan Sabato in 2022.
+% Modified again in 2023 and 2024 by Sivan Sabato and Jonathan Scarlett.
+% Previous contributors include Dan Roy, Lise Getoor and Tobias
+% Scheffer, which was slightly modified from the 2010 version by
+% Thorsten Joachims & Johannes Fuernkranz, slightly modified from the
+% 2009 version by Kiri Wagstaff and Sam Roweis's 2008 version, which is
+% slightly modified from Prasad Tadepalli's 2007 version which is a
+% lightly changed version of the previous year's version by Andrew
+% Moore, which was in turn edited from those of Kristian Kersting and
+% Codrina Lauth. Alex Smola contributed to the algorithmic style files.
+
