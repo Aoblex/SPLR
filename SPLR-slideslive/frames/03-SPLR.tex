@@ -1,0 +1,68 @@
+\section{The Sparse-Plus-Low-Rank Method}
+
+\begin{frame}{Overview}
+    We solve \eqref{eq:main} by introducing the Sparse-Plus-Low-Rank approach:
+    \begin{enumerate}
+        \item The algorithm is based on a quasi-Newton framework
+        \item \textbf{Sparse}: we obtain an approximation of $H(x)$ by sparsification
+        \item \textbf{Low-Rank}: we incorporate a low-rank correction term $auu^T + bvv^T$ to enhance the approximation quality
+        \item The update rule is:
+        \[
+            x_{k+1}=x_k-\alpha_k B_k^{-1}g_k,
+        \]
+        where $\alpha_k$ is the step size, $g_k$ is the gradient and $B_k$ is the approximated Hessian matrix
+    \end{enumerate}
+\end{frame}
+
+\subsection{Sparse}
+\begin{frame}{Sparsification Scheme}
+    \begin{definition}[Sparsification scheme]
+    \label{def:sparsification-scheme}
+    A sparsification scheme is defined by a set of coordinates $\Omega \subseteq \bar{\Omega} = \{(i, j): i \in [n], j \in [m-1] \}$. In particular, the sparsified matrix $\tilde{T}_{\Omega}$ has elements
+    \begin{equation*}
+    \label{eq:sparsified-T}
+    (\tilde{T}_{\Omega})_{ij} = \begin{cases}
+    \tilde{T}_{ij}, & (i,j)\in\Omega,\\
+    0, & (i,j)\notin\Omega,
+    \end{cases}
+    \end{equation*}
+    and the sparsified Hessian matrix is given by
+    \begin{equation*}
+    \label{eq:sparsified-Hessian}
+    H_{\Omega}=H_{\Omega}(x) = \eta^{-1}\begin{bmatrix}
+        \mathbf{diag}(T \mathbf{1}_m) & \tilde{T}_{\Omega} \\
+        \tilde{T}_{\Omega}^{T} & \mathbf{diag}(\tilde{T}^{T} \mathbf{1}_n) \\
+        \end{bmatrix}.
+    \end{equation*}
+    \end{definition}
+\end{frame}
+
+\begin{frame}{Sparsifying the Hessian Matrix}
+    Sparsification at each iteration:
+    \begin{itemize}
+        \item $\Omega^* = \{(i, j): i = 1 \text{ or } j = 1,i \in [n], j \in [m-1] \}$
+        \item $\Omega(\rho)$: coordinates of the largest $100\rho\%$ elements of $\tilde{T}$
+        \item $\Omega = \Omega^* \cup \Omega(\rho)$
+    \end{itemize}
+\end{frame}
+
+\subsection{Low-Rank}
+\begin{frame}{The Low-Rank Terms}
+At the $(k+1)^{th}$ iteration of the Newton-type optimization procedure,
+the approximated Hessian matrix is:
+\begin{equation*}
+\label{eq:BFGS-update}
+    H_{k+1} \approx B_{k+1} \coloneqq H_{\Omega}^{k+1} + auu^T + bvv^T + \tau_{k+1} I,
+\end{equation*}
+
+\begin{itemize}
+    \item $\tau_{k+1}$ is a shift parameter for numerical stability
+    \item Motivated by the BFGS algorithm, $a, b, u, v$ are determined by the secant equation:
+    \begin{align}
+    \label{eq:secant-equation-solution}
+        u & =y_{k},\quad v=(H_{\Omega}^{k+1}+\tau_{k+1}I)s_{k},\nonumber \\
+        a & =\frac{1}{y_{k}^{T}s_{k}},\quad b=-\frac{1}{s_{k}^{T}(H_{\Omega}^{k+1}+\tau_{k+1}I)s_{k}}.
+    \end{align}
+    where $s_k = x_{k+1} - x_k, y_k = g_{k+1} - g_k$
+\end{itemize}
+\end{frame}

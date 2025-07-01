@@ -1,0 +1,57 @@
+% Section 1
+\section{The Problem}
+\begin{frame}{The Primal Problem}
+    \begin{definition}[The Entropic-Regularized Optimal Transport]
+    \label{def:erot}
+        The entropic-regularized OT problem\footcite{cuturi2013sinkhorn} has the following form:
+        \begin{equation}
+        \label{eq:sinkhorn}
+        \begin{array}{c}
+        \underset{P\in\Pi(a,b)}{\min} \langle P, M \rangle - \eta h(P), \\
+        \end{array}
+        \end{equation}
+        \begin{itemize}
+            \item $h(P) = \sum_{i=1}^{n}\sum_{j=1}^{m} P_{ij}(1 - \log P_{ij})$
+            \item $a^T \mathbf{1}_n = b^T \mathbf{1}_m = 1$
+            \item $\Pi(a,b)=\{P\in\mathbb{R}^{n\times m}:P\mathbf{1}_{m}=a,P^{T}\mathbf{1}_{n}=b,P\ge0\}$
+        \end{itemize}
+    \end{definition}
+\end{frame}
+
+\begin{frame}{The Dual Problem}
+    The dual problem of \eqref{eq:sinkhorn}:
+    \begin{align}
+    \mathcal{L}(\alpha,\beta)=\ & \alpha^{T}a+\beta^{T}b \nonumber\\
+     & -\eta\sum_{i=1}^{n}\sum_{j=1}^{m}\exp\{\eta^{-1}(\alpha_{i}+\beta_{j}-M_{ij})\}. \label{eq:dual}
+    \end{align}
+    \begin{itemize}
+        \item $\alpha\in\mathbb{R}^n$, $\beta\in\mathbb{R}^m$ are free variables
+        \item $\mathcal{L}(\alpha, \beta) = \mathcal{L}(\alpha + c \mathbf{1}_n, \beta - c \mathbf{1}_m), \forall c \in \mathbb{R}$, so we remove the redundant degree of freedom by setting $\beta_m = 0$ globally.
+    \end{itemize}
+    % Since  for all $c \in \mathbb{R}$, we can remove the redundant degree of freedom by setting $\beta_m = 0$ globally.
+\end{frame}
+
+\begin{frame}{The Main Objective}
+    The main objective:
+    \begin{equation}
+    \label{eq:main}
+        \min_{x\in\mathbb{R}^{n+m-1}} f(x) \coloneqq \min_{\alpha \in \mathbb{R}^{n}, \beta \in \mathbb{R}^{m}} -\mathcal{L}(\alpha, \beta).
+    \end{equation}
+
+    \begin{itemize}
+        \item $f(x)$ is strictly convex
+        \item $\nabla f(x), \nabla^2f(x)$ both have closed-form expressions:
+        \begin{equation*}
+        \label{eq:derivatives}
+            g(x) = \begin{bmatrix}
+                T \mathbf{1}_m - a \\
+                \tilde{T}^T \mathbf{1}_n - \tilde{b} \\
+            \end{bmatrix},\ 
+            H(x) = \eta^{-1}\begin{bmatrix}
+                \mathbf{diag}(T \mathbf{1}_m) & \tilde{T} \\
+                \tilde{T}^{T} & \mathbf{diag}(\tilde{T}^{T} \mathbf{1}_n) \\
+            \end{bmatrix}.
+        \end{equation*}
+        \item Given an optimal solution $(\alpha^*,\beta^*)$, the primal optimal solution can be obtained as $T_{ij}^*=\exp\{ \eta^{-1}(\alpha_i^* + \beta_j^* - M_{ij}) \}$
+    \end{itemize}
+\end{frame}
