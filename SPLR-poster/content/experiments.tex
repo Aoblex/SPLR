@@ -1,77 +1,58 @@
 \headerbox{\bf\color{sufered} Experiments}
-{name=experiments,column=2,row=0,span=3}
+{name=experiments,column=2,span=3,below=update-rule}
 {
-    \begin{minipage}[t]{0.5\textwidth}
-        \textbf{\color{sufered}Synthetic Datasets for Training:} 
-        \vspace{-0.2em}
-        \begin{center}
-            \includegraphics[width=\textwidth]{images/datasets.pdf}
-        \end{center}
+    We evaluate the performance of the proposed
+    SPLR algorithm via a series of numerical experiments, and compare SPLR with a number of widely-used algorithms for solving entropic-regularized OT.
+
+    \begin{minipage}[c]{0.48\textwidth}
+        \centering
+        \vspace{0.5em}
+        {\bf\color{sufered} Synthetic Data} \\ \vspace{0.3em}
+        \includegraphics[width=0.3\textwidth]{save/Synthetic I/run_times/n=1000, m=1000, reg=0.001}
+        \includegraphics[width=0.3\textwidth]{save/Synthetic I/run_times/n=5000, m=5000, reg=0.001}
+        \includegraphics[width=0.3\textwidth]{save/Synthetic I/run_times/n=10000, m=10000, reg=0.001} \\
+        \includegraphics[width=0.3\textwidth]{save/Synthetic II/run_times/n=1000, m=1000, reg=0.001}
+        \includegraphics[width=0.3\textwidth]{save/Synthetic II/run_times/n=5000, m=5000, reg=0.001}
+        \includegraphics[width=0.3\textwidth]{save/Synthetic II/run_times/n=10000, m=10000, reg=0.001} \\
+        
     \end{minipage}
-    \begin{minipage}[t]{0.5\textwidth}
-        \textbf{\color{sufered}Quantitative Results on DiLiGenT Main Dataset:} 
-        \vspace{-0.2em}
-        \begin{center}
-            \includegraphics[width=0.98\textwidth]{images/res_quant_diligent_main}
-        \end{center}
+    \hfill
+    \begin{minipage}[c]{0.48\textwidth}
+        \centering
+        \vspace{0.5em}
+        {\bf\color{sufered} (Fashion-)MNIST} \\ \vspace{0.3em}
+        \includegraphics[width=0.3\textwidth]{save/MNIST/run_times/ID1=2, ID2=54698, norm=l1, reg=0.001}
+        \includegraphics[width=0.3\textwidth]{save/MNIST/run_times/ID1=239, ID2=43981, norm=l1, reg=0.001}
+        \includegraphics[width=0.3\textwidth]{save/MNIST/run_times/ID1=17390, ID2=49947, norm=l1, reg=0.001} \\
+        \includegraphics[width=0.3\textwidth]{save/Fashion-MNIST/run_times/ID1=2, ID2=54698, norm=l1, reg=0.001}
+        \includegraphics[width=0.3\textwidth]{save/Fashion-MNIST/run_times/ID1=239, ID2=43981, norm=l1, reg=0.001}
+        \includegraphics[width=0.3\textwidth]{save/Fashion-MNIST/run_times/ID1=17390, ID2=49947, norm=l1, reg=0.001}\\
     \end{minipage}
 
     \vspace{0.5em}
 
-    \begin{minipage}[t]{0.525\textwidth}
-        \textbf{\color{sufered}Feature Visualization:}
-        \vspace{-0.5em}
-        \begin{center}
-            \includegraphics[width=\textwidth]{images/visualization}
-        \end{center}
-        \vspace{-0.9em}
-        \begin{itemize}
-            \item Different regions with similar normal directions are fired in different channels. Each channel can therefore be interpreted as the probability of the normal belonging to a certain direction.
-        \end{itemize}
+    \begin{minipage}[c]{0.48\textwidth}
+        \centering
+        \vspace{0.5em}
+        {\bf\color{sufered} Imagenet} \\ \vspace{0.3em}
+        \includegraphics[width=0.3\textwidth]{save/ImageNet - Extra/run_times/CLASS1=tench, CLASS2=cassette player, dim=30, norm=l1, reg=0.01.pdf}
+        \includegraphics[width=0.3\textwidth]{save/ImageNet - Extra/run_times/CLASS1=tench, CLASS2=church, dim=30, norm=l1, reg=0.01.pdf}
+        \includegraphics[width=0.3\textwidth]{save/ImageNet - Extra/run_times/CLASS1=tench, CLASS2=garbage truck, dim=30, norm=l1, reg=0.01.pdf} \\
+        \includegraphics[width=0.3\textwidth]{save/ImageNet - Extra/run_times/CLASS1=tench, CLASS2=cassette player, dim=30, norm=l2, reg=0.001.pdf}
+        \includegraphics[width=0.3\textwidth]{save/ImageNet - Extra/run_times/CLASS1=tench, CLASS2=church, dim=30, norm=l2, reg=0.001.pdf}
+        \includegraphics[width=0.3\textwidth]{save/ImageNet - Extra/run_times/CLASS1=tench, CLASS2=garbage truck, dim=30, norm=l2, reg=0.001.pdf} \\
     \end{minipage}
     \hfill
-    \begin{minipage}[t]{0.465\textwidth}
-    \textbf{\color{sufered}Qualitative Results on DiLiGenT Main Dataset:} 
-        \begin{center}
-            \vspace{-0.5em}
-            \includegraphics[width=\textwidth]{images/res_qual_diligent_main}
-        \end{center}
+    \begin{minipage}[c]{0.48\textwidth}
+        \centering
+        \vspace{0.5em}
+        {\bf\color{sufered} Effect of low-rank terms} \\ \vspace{0.3em}
+        \includegraphics[width=0.3\textwidth]{save/Synthetic I - Ablation/run_times/n=1000, m=1000, reg=0.001.pdf}
+        \includegraphics[width=0.3\textwidth]{save/Synthetic I - Ablation/run_times/n=5000, m=5000, reg=0.001.pdf}
+        \includegraphics[width=0.3\textwidth]{save/Synthetic I - Ablation/run_times/n=10000, m=10000, reg=0.001.pdf} \\
+        \includegraphics[width=0.3\textwidth]{save/Synthetic II - Ablation/run_times/n=1000, m=1000, reg=0.001.pdf}
+        \includegraphics[width=0.3\textwidth]{save/Synthetic II - Ablation/run_times/n=5000, m=5000, reg=0.001.pdf}
+        \includegraphics[width=0.3\textwidth]{save/Synthetic II - Ablation/run_times/n=10000, m=10000, reg=0.001.pdf} \\
     \end{minipage}
 
-    \vspace{0.8em}
-    \textbf{\color{sufered}Qualitative Results on the Gourd\&Apple Dataset and Light Stage Data Gallery:}
-    \vspace{-0.8em}
-    \begin{center}
-        \includegraphics[width=1\textwidth]{images/gourd_stage}
-    \end{center}
-
-    \begin{minipage}[t]{0.6\textwidth}
-        \textbf{\color{sufered}Quantitative Results on Spheres Rendered with 100 Different Materials:} 
-        \vspace{-0.5em}
-        \begin{center}
-            \includegraphics[width=\textwidth]{images/100brdf.png}
-        \end{center}
-    \end{minipage}
-    \begin{minipage}[t]{0.4\textwidth}
-        \textbf{\color{sufered}Quantitative Results of Uncalibrated PS-FCN on DiLiGenT Main Dataset:} 
-        \vspace{-0.5em}
-        \begin{center}
-            \includegraphics[width=\textwidth]{images/res_uncalibrated}
-        \end{center}
-        \vspace{-1.5em}
-
-        \begin{center}
-        \begin{minipage}{0.56\linewidth}
-            \begin{center}
-            \textbf{Project Webpage}: \\
-            \vspace{0.5em}\textbf{Code} \& \textbf{Dataset} \& \textbf{Model}
-            \end{center}
-        \end{minipage}
-        \begin{minipage}{0.24\linewidth}
-            \begin{center}
-                \includegraphics[width=\linewidth]{images/PS-FCN_QRCode.png}
-            \end{center}
-        \end{minipage}
-        \end{center}
-    \end{minipage}
 }
