@@ -521,20 +521,20 @@
   \debug{BAPOSTER: Using shade left right background.}
   \begin{tikzpicture}[remember picture,overlay]%
     \shade [shading=axis,left color=#1,right color=#2] (current page.north west)
-           rectangle(current page.south east);
+           rectangle(current page.south east)
   \end{tikzpicture}%
 }
 \newcommand{\baposter@background@shadetb}[2]{
   \debug{BAPOSTER: Using shade top to bottom background.}
   \begin{tikzpicture}[remember picture,overlay]%
     \shade [shading=axis,top color=#1,bottom color=#2] (current page.north west)
-           rectangle(current page.south east);
+           rectangle(current page.south east)
   \end{tikzpicture}%
 }
 \newcommand{\baposter@background@plain}[2]{
   \debug{BAPOSTER: Using plain background.}
   \begin{tikzpicture}[remember picture,overlay]%
-    \fill [fill=#1] (current page.north west) rectangle(current page.south east);
+    \fill [fill=#1] (current page.north west) rectangle(current page.south east)
   \end{tikzpicture}%
 }
 \newcommand{\baposter@background@user}[2]{
@@ -612,25 +612,25 @@
 % These functions take two arguments: borderColor
 \newcommand{\baposter@box@drawborder@none}[1]{}
 \newcommand{\baposter@box@drawborder@bars}[1]{
-  \draw[color=#1] \baposterBoxGetShape;%
+  \draw[color=#1] \baposterBoxGetShape%
 }
 \newcommand{\baposter@box@drawborder@coils}[1]{
-  \draw[color=#1,segment amplitude=0.35em,segment length=0.4em,snake=coil] \baposterBoxGetShape;%
+  \draw[color=#1,segment amplitude=0.35em,segment length=0.4em,snake=coil] \baposterBoxGetShape%
 }
 \newcommand{\baposter@box@drawborder@triangles}[1]{
-  \draw[color=#1,segment amplitude=0.2em,segment length=0.4em,snake=triangles] \baposterBoxGetShape;%
+  \draw[color=#1,segment amplitude=0.2em,segment length=0.4em,snake=triangles] \baposterBoxGetShape%
 }
 \newcommand{\baposter@box@drawborder@rectangle}[1]{
-  \draw[color=#1] \baposterBoxGetShape;%
+  \draw[color=#1] \baposterBoxGetShape%
 }
 \newcommand{\baposter@box@drawborder@rounded}[1]{
-  \draw[color=#1] \baposterBoxGetShape;%
+  \draw[color=#1] \baposterBoxGetShape%
 }
 \newcommand{\baposter@box@drawborder@roundedleft}[1]{
-  \draw[color=#1] \baposterBoxGetShape;%
+  \draw[color=#1] \baposterBoxGetShape%
 }
 \newcommand{\baposter@box@drawborder@roundedright}[1]{
-  \draw[color=#1] \baposterBoxGetShape;%
+  \draw[color=#1] \baposterBoxGetShape%
 }
 \newcommand{\baposter@box@drawborder@faded}[1]{
   % This is the right way to do it, but it does not work with evince, and has problems during printing, so instead we do
@@ -640,7 +640,7 @@
   \foreach \x in {0,1,...,90} \draw[color=#1!\x] ($(\baposter@box@name tne)!{(100-\x)/100}!(\baposter@box@name se)$) -- ($(\baposter@box@name tne)!{(100-(\x+10))/100}!(\baposter@box@name se)$);%
 }
 \newcommand{\baposter@box@drawborder@roundedsmall}[1]{
-  \draw[color=#1] \baposterBoxGetShape;%
+  \draw[color=#1] \baposterBoxGetShape%
 }
 
 
@@ -680,21 +680,21 @@
 
 % These functions take one argument: the header text
 \newcommand{\baposter@box@headerdrawtext@rectangle}[1]{
-  \path (\baposter@box@name nw) +(0em,-0.5\baposter@box@@boxheaderheight) node[anchor=west,inner sep=0.4em] {#1};%
+  \path (\baposter@box@name nw) +(0em,-0.5\baposter@box@@boxheaderheight) node[anchor=west,inner sep=0.4em] {#1}%
 }
 \newcommand{\baposter@box@headerdrawtext@smallrounded}[1]{
-  \path (\baposter@box@name nw) +(0.5\boxwidth,-0.5\baposter@box@@boxheaderheight) node[anchor=center] {#1};%
+  \path (\baposter@box@name nw) +(0.5\boxwidth,-0.5\baposter@box@@boxheaderheight) node[anchor=center] {#1}%
 }
 \newcommand{\baposter@box@headerdrawtext@roundedright}[1]{
   \path (\baposter@box@name nw) +(0em,-0.5\baposter@box@@boxheaderheight)%
-        node[anchor=west,inner sep=0.4em,text depth=0.0em] {#1};%
+        node[anchor=west,inner sep=0.4em,text depth=0.0em] {#1}%
 }
 \newcommand{\baposter@box@headerdrawtext@roundedleft}[1]{
   \path (\baposter@box@name nw) +(0em,-0.5\baposter@box@@boxheaderheight)%
-        node[anchor=west,inner sep=0.4em] {#1};%
+        node[anchor=west,inner sep=0.4em] {#1}%
 }
 \newcommand{\baposter@box@headerdrawtext@rounded}[1]{
-    \path (\baposter@box@name nw) +(0.5\boxwidth,-0.5\baposter@box@@boxheaderheight) node[anchor=center] {#1};%
+    \path (\baposter@box@name nw) +(0.5\boxwidth,-0.5\baposter@box@@boxheaderheight) node[anchor=center] {#1}%
 }
 
 
@@ -970,8 +970,8 @@
       %% Setting the bg colors of the box header
       \baposterHeaderSetShade{headerColorOne}{headerColorTwo}{borderColor}
 %
-      \tikzstyle{rc}=[rounded corners=\baposter@box@@cornerradius];%
-      \tikzstyle{src}=[rounded corners=0.5em];%
+      \tikzstyle{rc}=[rounded corners=\baposter@box@@cornerradius]%
+      \tikzstyle{src}=[rounded corners=0.5em]%
 %
 
     %% Now that everything is set up, draw the actual box, with bg and header
