@@ -1,0 +1,13 @@
+\headerbox{\bf\color{sufered} Update Rule}
+{name=update-rule,column=2,row=0,span=3}
+{
+    Suppose that we are at the $(k+1)$-th iteration of the optimization procedure. We approximate $H_{k+1}$ by a matrix $B_{k+1}$ of the form:
+    \begin{equation*}
+    \label{eq:BFGS-update}
+        H_{k+1} \approx B_{k+1} \coloneqq (H_{\Omega}^{k+1}) + (auu^T + bvv^T) + (\tau_{k+1} I),
+    \end{equation*}
+    where $H_{\Omega}$ is the sparsified Hessian matrix according to some sparsification scheme $\Omega$, $auu^T+bvv^T$ is a rank-two approximation term, and $\tau>0$ is a shift parameter. Then $x$ is updated according to the following rule:
+    \[
+    x_{k+1}=x_k-\alpha_k B_k^{-1}\nabla f(x_k),
+    \]
+}
