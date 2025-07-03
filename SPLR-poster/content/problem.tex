@@ -1,0 +1,11 @@
+\headerbox{\bf\color{sufered} Problem Definition}
+{name=problem,column=0,row=0,span=1}
+{
+    Our goal is to solve the entropic-regularized optimal transport problem, and our approach is to study its dual problem. After removing one redundant degree of freedom, we obtain the \emph{smooth} and \emph{unconstrained} \emph{convex} optimization problem:
+    \begin{align*}
+    f(x)= & -\mathcal{L}(\alpha, \beta) \\
+        = & \eta\sum\exp\{\eta^{-1}(\alpha_{i}+\beta_{j}-M_{ij})\}\nonumber\\
+          & -\alpha^T a-\beta^T b, \label{eq:objective}
+    \end{align*}
+    where $x = (\alpha_1,\ldots,\alpha_n,\beta_1,\ldots,\beta_{m-1})^T$.
+}
